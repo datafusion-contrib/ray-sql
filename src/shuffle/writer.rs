@@ -2,6 +2,7 @@ use datafusion::arrow::array::Int32Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::ipc::writer::FileWriter;
 use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::common::{Result, Statistics};
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::PhysicalSortExpr;
@@ -117,7 +118,10 @@ impl ExecutionPlan for ShuffleWriterExec {
                     let input_batch = result?;
                     rows += input_batch.num_rows();
 
-                    println!("batch: {:?}", input_batch);
+                    println!(
+                        "ShuffleWriterExec writing batch:\n{}",
+                        pretty_format_batches(&[input_batch.clone()])?
+                    );
 
                     //write_metrics.input_rows.add(input_batch.num_rows());
 
@@ -143,6 +147,23 @@ impl ExecutionPlan for ShuffleWriterExec {
                         }
                         Ok(())
                     })?;
+                }
+
+                for (i, w) in writers.iter_mut().enumerate() {
+                    match w {
+                        Some(w) => {
+                            w.finish()?;
+                            println!(
+                                    "Finished writing shuffle partition {} at {:?}. Batches: {}. Rows: {}. Bytes: {}.",
+                                    i,
+                                    w.path(),
+                                    w.num_batches,
+                                    w.num_rows,
+                                    w.num_bytes
+                                );
+                        }
+                        None => {}
+                    }
                 }
 
                 println!("finished processing stream with {rows} rows");

@@ -4,6 +4,7 @@ use crate::utils::wait_for_future;
 use datafusion::arrow::array::Int32Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::physical_plan::displayable;
@@ -85,8 +86,6 @@ impl PyContext {
 
     /// Execute a partition of a query plan. This will typically be executing a shuffle write and write the results to disk
     pub fn execute_partition(&self, plan: PyExecutionPlan, part: usize) -> PyResult<()> {
-        println!("Executing: {}", plan.display_indent());
-
         let ctx = Arc::new(TaskContext::new(
             "task_id".to_string(),
             "session_id".to_string(),
@@ -101,13 +100,15 @@ impl PyContext {
 
         let fut = rt.spawn(async move {
             let mut stream = plan.plan.execute(part, ctx)?;
+            let mut results = vec![];
             while let Some(result) = stream.next().await {
                 let input_batch = result?;
-                println!("received batch with {} rows", input_batch.num_rows());
+                results.push(input_batch);
             }
 
-            // TODO remove this dummy batch
+            println!("Results:\n{}", pretty_format_batches(&results)?);
 
+            // TODO remove this dummy batch
             // create a dummy batch to return - later this could be metadata about the
             // shuffle partitions that were written out
             let schema = Arc::new(Schema::new(vec![Field::new("foo", DataType::Int32, true)]));
