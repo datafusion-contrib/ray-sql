@@ -1,4 +1,4 @@
-use datafusion::arrow::datatypes::SchemaRef;
+use datafusion::arrow::datatypes::{Schema, SchemaRef};
 use datafusion::common::{DataFusionError, Statistics};
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::FunctionRegistry;
@@ -7,6 +7,7 @@ use datafusion::physical_plan::{
     DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
 };
 use datafusion_proto::physical_plan::PhysicalExtensionCodec;
+use prost::Message;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -122,10 +123,18 @@ impl PhysicalExtensionCodec for ShuffleCodec {
     fn try_decode(
         &self,
         buf: &[u8],
-        inputs: &[Arc<dyn ExecutionPlan>],
-        registry: &dyn FunctionRegistry,
+        _inputs: &[Arc<dyn ExecutionPlan>],
+        _registry: &dyn FunctionRegistry,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
-        todo!()
+        // decode bytes to protobuf struct
+        let reader = crate::protobuf::ShuffleReaderExecNode::decode(buf).map_err(|e| {
+            DataFusionError::Internal(format!("failed to decode shuffle reader plan: {e:?}"))
+        })?;
+        // create reader
+        Ok(Arc::new(ShuffleReaderExec::new(
+            1,
+            SchemaRef::new(Schema::empty()),
+        )))
     }
 
     fn try_encode(

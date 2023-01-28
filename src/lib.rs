@@ -1,6 +1,9 @@
 use datafusion_python::physical_plan::PyExecutionPlan;
 use pyo3::prelude::*;
 
+mod proto;
+pub use proto::generated::protobuf;
+
 pub mod context;
 pub mod planner;
 pub mod shuffle;
