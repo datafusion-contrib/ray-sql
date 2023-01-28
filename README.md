@@ -1,16 +1,7 @@
 # RaySQL: DataFusion on Ray
 
-This is an experimental research project to evaluate the concept of performing distributed SQL queries from Python, using 
+This is an experimental research project to evaluate the concept of performing distributed SQL queries from Python, using
 [Ray](https://www.ray.io/) and [DataFusion](https://github.com/apache/arrow-datafusion).
-
-## Motivation
-
-This would make a good conference talk to demonstrate the power of building new query engines on top of the DataFusion
-framework. This project currently contains of fewer than 1,000 lines of code.
-
-## Status
-
-- Prototype. Not ready for use at all.
 
 ## Example
 
@@ -32,6 +23,10 @@ ctx = RaySqlContext(workers)
 ctx.register_csv('tips', 'tips.csv', True)
 ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
 ```
+
+## Status
+
+- Proof-of-concept. Not producing correct results yet.
 
 ## Features
 
