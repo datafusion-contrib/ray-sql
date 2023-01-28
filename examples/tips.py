@@ -11,16 +11,18 @@ class Worker:
     def execute_query_partition(self, plan_bytes, part):
         plan = self.ctx.deserialize_execution_plan(plan_bytes)
         print("Executing partition #{}:\n{}".format(part, plan.display_indent()))
+
         # This is delegating to DataFusion for execution, but this would be a good place
         # to plug in other execution engines by translating the plan into another engine's plan
         # (perhaps via Substrait, once DataFusion supports converting a physical plan to Substrait)
-
-        #TODO: execute
+        self.ctx.execute_partition(plan, part)
 
         return True
 
 
 def execute_query_stage(ctx, graph, stage, workers):
+
+    # TODO make better use of futures here so that more runs in parallel
 
     # execute child stages first
     for child_id in stage.get_child_stage_ids():
@@ -33,8 +35,13 @@ def execute_query_stage(ctx, graph, stage, workers):
     plan_bytes = ctx.serialize_execution_plan(stage.get_execution_plan())
 
     # round-robin allocation across workers
+    futures = []
     for part in range(stage.get_input_partition_count()):
-        workers[part % len(workers)].execute_query_partition.remote(plan_bytes, part)
+        futures.append(workers[part % len(workers)].execute_query_partition.remote(plan_bytes, part))
+
+    print("Waiting for query stage to complete")
+    ray.get(futures)
+    print("Query stage has completed")
 
 
 if __name__ == "__main__":

@@ -1,33 +1,45 @@
 use datafusion::arrow::array::Int32Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use datafusion::arrow::ipc::writer::FileWriter;
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::common::{DataFusionError, Statistics};
+use datafusion::common::{DataFusionError, Result, Statistics};
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::execution::FunctionRegistry;
 use datafusion::physical_expr::PhysicalSortExpr;
+use datafusion::physical_plan::common::batch_byte_size;
 use datafusion::physical_plan::memory::MemoryStream;
+use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
-    DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
+    metrics, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
+    SendableRecordBatchStream,
 };
 use datafusion_proto::physical_plan::PhysicalExtensionCodec;
+use datafusion_proto::protobuf::PartitionStats;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use prost::Message;
 use std::any::Any;
-use std::collections::HashMap;
 use std::fmt::Formatter;
+use std::fs::File;
+use std::pin::Pin;
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct ShuffleWriterExec {
+    pub stage_id: usize,
     pub(crate) plan: Arc<dyn ExecutionPlan>,
+    pub metrics: ExecutionPlanMetricsSet,
 }
 
 impl ShuffleWriterExec {
-    pub fn new(plan: Arc<dyn ExecutionPlan>) -> Self {
-        Self { plan }
+    pub fn new(stage_id: usize, plan: Arc<dyn ExecutionPlan>) -> Self {
+        Self {
+            stage_id,
+            plan,
+            metrics: ExecutionPlanMetricsSet::new(),
+        }
     }
 }
 
@@ -59,20 +71,26 @@ impl ExecutionPlan for ShuffleWriterExec {
         unimplemented!()
     }
 
+    fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ShuffleWriterExec(stage_id={})", self.stage_id)
+    }
+
     fn execute(
         &self,
         partition: usize,
         context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
         let mut stream = self.plan.execute(partition, context)?;
+        let file = format!("/tmp/raysql/{}_{partition}.arrow", self.stage_id);
+        let write_time = MetricBuilder::new(&self.metrics).subset_time("write_time", partition);
         let results = async move {
             // stream the results from the query
-            while let Some(result) = stream.next().await {
-                let input_batch = result?;
-                println!("received batch with {} rows", input_batch.num_rows());
-
-                // TODO write to disk (copy code from Ballista)
-            }
+            println!("Executing query and writing results to {file}");
+            let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
+            println!(
+                "Query completed. Shuffle write time: {}. Rows: {}.",
+                write_time, stats.num_rows
+            );
 
             // create a dummy batch to return - later this could be metadata about the
             // shuffle partitions that were written out
@@ -83,8 +101,9 @@ impl ExecutionPlan for ShuffleWriterExec {
             // return as a stream
             MemoryStream::try_new(vec![batch], schema, None)
         };
+        let schema = self.schema().clone();
         Ok(Box::pin(RecordBatchStreamAdapter::new(
-            self.schema(),
+            schema,
             futures::stream::once(results).try_flatten(),
         )))
     }
@@ -92,4 +111,45 @@ impl ExecutionPlan for ShuffleWriterExec {
     fn statistics(&self) -> Statistics {
         Statistics::default()
     }
+}
+
+/// Stream data to disk in Arrow IPC format
+pub async fn write_stream_to_disk(
+    stream: &mut Pin<Box<dyn RecordBatchStream + Send>>,
+    path: &str,
+    disk_write_metric: &metrics::Time,
+) -> Result<PartitionStats> {
+    let file = File::create(path).unwrap();
+
+    /*.map_err(|e| {
+        error!("Failed to create partition file at {}: {:?}", path, e);
+        BallistaError::IoError(e)
+    })?;*/
+
+    let mut num_rows = 0;
+    let mut num_batches = 0;
+    let mut num_bytes = 0;
+    let mut writer = FileWriter::try_new(file, stream.schema().as_ref())?;
+
+    while let Some(result) = stream.next().await {
+        let batch = result?;
+
+        let batch_size_bytes: usize = batch_byte_size(&batch);
+        num_batches += 1;
+        num_rows += batch.num_rows();
+        num_bytes += batch_size_bytes;
+
+        let timer = disk_write_metric.timer();
+        writer.write(&batch)?;
+        timer.done();
+    }
+    let timer = disk_write_metric.timer();
+    writer.finish()?;
+    timer.done();
+    Ok(PartitionStats {
+        num_rows: num_rows as i64,
+        num_batches: num_batches as i64,
+        num_bytes: num_bytes as i64,
+        column_stats: vec![],
+    })
 }

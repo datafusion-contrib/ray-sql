@@ -1,4 +1,3 @@
-use datafusion_python::physical_plan::PyExecutionPlan;
 use pyo3::prelude::*;
 
 mod proto;
@@ -12,7 +11,7 @@ pub mod utils;
 /// A Python module implemented in Rust.
 #[pymodule]
 fn _raysql_internal(_py: Python, m: &PyModule) -> PyResult<()> {
+    // register classes that can be created directly from Python code
     m.add_class::<context::PyContext>()?;
-    m.add_class::<planner::PyQueryStage>()?;
     Ok(())
 }
