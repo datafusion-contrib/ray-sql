@@ -28,8 +28,9 @@ pub struct PyContext {
 impl PyContext {
     #[new]
     pub fn new() -> Self {
+        let config = SessionConfig::default().with_target_partitions(4);
         Self {
-            ctx: SessionContext::default(),
+            ctx: SessionContext::with_config(config),
         }
     }
 

@@ -8,6 +8,7 @@ use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::common::{batch_byte_size, IPCWriter};
 use datafusion::physical_plan::memory::MemoryStream;
 use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
+use datafusion::physical_plan::repartition::BatchPartitioner;
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
     metrics, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
@@ -19,6 +20,7 @@ use futures::TryStreamExt;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::fs::File;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -49,7 +51,7 @@ impl ExecutionPlan for ShuffleWriterExec {
     }
 
     fn output_partitioning(&self) -> Partitioning {
-        todo!()
+        self.plan.output_partitioning()
     }
 
     fn output_ordering(&self) -> Option<&[PhysicalSortExpr]> {
@@ -73,17 +75,26 @@ impl ExecutionPlan for ShuffleWriterExec {
 
     fn execute(
         &self,
-        partition: usize,
+        input_partition: usize,
         context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let mut stream = self.plan.execute(partition, context)?;
-        let file = format!("/tmp/raysql/{}_{partition}.arrow", self.stage_id);
-        let write_time = MetricBuilder::new(&self.metrics).subset_time("write_time", partition);
-        let partition_count = self.output_partitioning().partition_count();
+        println!("ShuffleWriteExec::execute(input_partition={input_partition})");
+
+        let mut stream = self.plan.execute(input_partition, context)?;
+        let write_time =
+            MetricBuilder::new(&self.metrics).subset_time("write_time", input_partition);
+        let repart_time =
+            MetricBuilder::new(&self.metrics).subset_time("repart_time", input_partition);
+
+        let stage_id = self.stage_id;
+        let partitioning = self.output_partitioning();
+        let partition_count = partitioning.partition_count();
 
         let results = async move {
             if partition_count == 1 {
                 // stream the results from the query
+                // TODO remove hard-coded path
+                let file = format!("/tmp/raysql/stage_{}_part_0.arrow", stage_id);
                 println!("Executing query and writing results to {file}");
                 let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
                 println!(
@@ -97,6 +108,44 @@ impl ExecutionPlan for ShuffleWriterExec {
                 for _ in 0..partition_count {
                     writers.push(None);
                 }
+
+                let mut partitioner = BatchPartitioner::try_new(partitioning, repart_time.clone())?;
+
+                let mut rows = 0;
+
+                while let Some(result) = stream.next().await {
+                    let input_batch = result?;
+                    rows += input_batch.num_rows();
+
+                    println!("batch: {:?}", input_batch);
+
+                    //write_metrics.input_rows.add(input_batch.num_rows());
+
+                    partitioner.partition(input_batch, |output_partition, output_batch| {
+                        match &mut writers[output_partition] {
+                            Some(w) => {
+                                w.write(&output_batch)?;
+                            }
+                            None => {
+                                // TODO remove hard-coded path
+                                let path = format!(
+                                    "/tmp/raysql/stage_{}_part_{}.arrow",
+                                    stage_id, output_partition
+                                );
+                                let path = Path::new(&path);
+                                println!("Writing results to {:?}", path);
+
+                                let mut writer = IPCWriter::new(&path, stream.schema().as_ref())?;
+
+                                writer.write(&output_batch)?;
+                                writers[output_partition] = Some(writer);
+                            }
+                        }
+                        Ok(())
+                    })?;
+                }
+
+                println!("finished processing stream with {rows} rows");
             }
 
             // create a dummy batch to return - later this could be metadata about the

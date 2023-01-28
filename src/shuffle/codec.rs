@@ -65,7 +65,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                 partition: 0,
                 schema: Some(schema),
                 num_output_partitions: 1,
-                shuffle_dir: "/tmp/raysql-shuffle".to_string(),
+                shuffle_dir: "/tmp/raysql".to_string(), // TODO remove hard-coded path
             };
             PlanType::ShuffleReader(reader)
         } else if let Some(writer) = node.as_any().downcast_ref::<ShuffleWriterExec>() {
@@ -75,7 +75,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                 plan: Some(plan),
                 partition_expr: vec![],
                 num_output_partitions: 1,
-                shuffle_dir: "/tmp/raysql-shuffle".to_string(),
+                shuffle_dir: "/tmp/raysql".to_string(), // TODO remove hard-coded path
             };
             PlanType::ShuffleWriter(writer)
         } else {

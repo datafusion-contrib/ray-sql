@@ -29,15 +29,18 @@ class RaySqlContext:
             child_stage = graph.get_query_stage(child_id)
             self.execute_query_stage(graph, child_stage)
 
-        print("Scheduling query stage #{}".format(stage.id()))
+        partition_count = stage.get_input_partition_count()
+
+        print("Scheduling query stage #{} with {} input partitions and {} output partitions".format(stage.id(), partition_count, stage.get_output_partition_count()))
 
         # serialize the plan
         plan_bytes = self.ctx.serialize_execution_plan(stage.get_execution_plan())
 
         # round-robin allocation across workers
         futures = []
-        for part in range(stage.get_input_partition_count()):
+        for part in range(partition_count):
             worker_index = part % len(self.workers)
+            print("Asking worker {} to execute partition {}".format(worker_index, part))
             futures.append(self.workers[worker_index].execute_query_partition.remote(plan_bytes, part))
 
         print("Waiting for query stage #{} to complete".format(stage.id()))

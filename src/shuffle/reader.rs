@@ -62,7 +62,8 @@ impl ExecutionPlan for ShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let file = format!("/tmp/raysql/{}_{partition}.arrow", self.stage_id);
+        // TODO remove hard-coded path
+        let file = format!("/tmp/raysql/stage_{}_part_{partition}.arrow", self.stage_id);
         println!("Shuffle reader reading from {file}");
         let reader = FileReader::try_new(File::open(&file)?, None)?;
         Ok(Box::pin(LocalShuffleStream::new(reader)))

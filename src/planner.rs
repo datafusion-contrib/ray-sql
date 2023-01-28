@@ -109,6 +109,10 @@ impl PyQueryStage {
     pub fn get_input_partition_count(&self) -> usize {
         self.stage.get_input_partition_count()
     }
+
+    pub fn get_output_partition_count(&self) -> usize {
+        self.stage.plan.output_partitioning().partition_count()
+    }
 }
 
 #[derive(Debug)]
