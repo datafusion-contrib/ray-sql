@@ -1,4 +1,4 @@
-use datafusion::arrow::datatypes::{Schema, SchemaRef};
+use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::arrow::ipc::reader::FileReader;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
@@ -8,7 +8,6 @@ use datafusion::physical_plan::{
     DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream, SendableRecordBatchStream,
 };
 use futures::Stream;
-use prost::Message;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::fs::File;

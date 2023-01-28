@@ -5,7 +5,7 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::{Result, Statistics};
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::PhysicalSortExpr;
-use datafusion::physical_plan::common::batch_byte_size;
+use datafusion::physical_plan::common::{batch_byte_size, IPCWriter};
 use datafusion::physical_plan::memory::MemoryStream;
 use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
@@ -79,14 +79,25 @@ impl ExecutionPlan for ShuffleWriterExec {
         let mut stream = self.plan.execute(partition, context)?;
         let file = format!("/tmp/raysql/{}_{partition}.arrow", self.stage_id);
         let write_time = MetricBuilder::new(&self.metrics).subset_time("write_time", partition);
+        let partition_count = self.output_partitioning().partition_count();
+
         let results = async move {
-            // stream the results from the query
-            println!("Executing query and writing results to {file}");
-            let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
-            println!(
-                "Query completed. Shuffle write time: {}. Rows: {}.",
-                write_time, stats.num_rows
-            );
+            if partition_count == 1 {
+                // stream the results from the query
+                println!("Executing query and writing results to {file}");
+                let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
+                println!(
+                    "Query completed. Shuffle write time: {}. Rows: {}.",
+                    write_time, stats.num_rows
+                );
+            } else {
+                // we won't necessary produce output for every possible partition, so we
+                // create writers on demand
+                let mut writers: Vec<Option<IPCWriter>> = vec![];
+                for _ in 0..partition_count {
+                    writers.push(None);
+                }
+            }
 
             // create a dummy batch to return - later this could be metadata about the
             // shuffle partitions that were written out
