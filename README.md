@@ -6,11 +6,36 @@ This is an experimental research project to evaluate the concept of performing d
 ## Motivation
 
 This would make a good conference talk to demonstrate the power of building new query engines on top of the DataFusion
-framework. This project currently contains fewer than 500 lines of code.
+framework. This project currently contains of fewer than 1,000 lines of code.
+
+## Status
+
+- Prototype. Not ready for use at all.
+
+## Example
+
+See [examples/tips.py](examples/tips.py).
+
+```python
+import ray
+from raysql.context import RaySqlContext
+from raysql.worker import Worker
+
+# Start our cluster
+ray.init()
+
+# create some remote Workers
+workers = [Worker.remote() for i in range(2)]
+
+# create context and plan a query
+ctx = RaySqlContext(workers)
+ctx.register_csv('tips', 'tips.csv', True)
+ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+```
 
 ## Features
 
-- Mature SQL support (CTEs, joins, subqueries, etc)
+- Mature SQL support (CTEs, joins, subqueries, etc) thanks to DataFusion
 - Support for CSV and Parquet files
 
 ## Limitations
