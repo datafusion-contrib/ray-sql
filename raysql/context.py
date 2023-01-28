@@ -30,7 +30,6 @@ class RaySqlContext:
             self.execute_query_stage(graph, child_stage)
 
         partition_count = stage.get_input_partition_count()
-
         print("Scheduling query stage #{} with {} input partitions and {} output partitions".format(stage.id(), partition_count, stage.get_output_partition_count()))
 
         # serialize the plan

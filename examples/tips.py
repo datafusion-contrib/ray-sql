@@ -13,4 +13,5 @@ ctx = RaySqlContext(workers)
 ctx.register_csv('tips', 'tips.csv', True)
 
 ctx.sql('select day, sum(total_bill) from tips group by day')
-# ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+
+#ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
