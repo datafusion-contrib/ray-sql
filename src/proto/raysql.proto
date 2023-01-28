@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package raysql.protobuf;
+
+option java_multiple_files = true;
+option java_package = "org.apache.arrow.ballista.protobuf";
+option java_outer_classname = "BallistaProto";
+
+import "datafusion.proto";
+
+message ShuffleReaderExecNode {
+//  repeated PartitionId partition = 1;
+  datafusion.Schema schema = 2;
+}
+
+//
+message ShuffleWriterExecNode {
+  uint32 stage_id = 1;
+//  Partitioning output_partitioning = 2;
+}
+//
+//message PartitionId {
+//
+//}
+//
+//message Partitioning {
+//  repeated datafusion.PhysicalExprNode hash_expr = 1;
+//  uint64 partition_count = 2;
+//}

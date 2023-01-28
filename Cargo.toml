@@ -9,13 +9,20 @@ edition = "2021"
 readme = "README.md"
 license = "Apache-2.0"
 rust-version = "1.62"
+build = "build.rs"
 
 [dependencies]
 datafusion = { git = "https://github.com/apache/arrow-datafusion", rev = "5238e8c97f998b4d2cb9fab85fb182f325a1a7fb", features = ["pyarrow", "avro"] }
 datafusion-proto = { git = "https://github.com/apache/arrow-datafusion", rev = "5238e8c97f998b4d2cb9fab85fb182f325a1a7fb" }
 datafusion-python = { path = "../../apache/arrow-datafusion-python" }
+prost = "0.11"
+prost-types = "0.11"
 pyo3 = { version = "~0.17.3", features = ["extension-module", "abi3", "abi3-py37"] }
 tokio = { version = "1.24", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+
+[build-dependencies]
+rustc_version = "0.4.0"
+tonic-build = { version = "0.8", default-features = false, features = ["transport", "prost"] }
 
 [lib]
 name = "raysql"

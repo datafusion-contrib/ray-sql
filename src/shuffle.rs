@@ -1,10 +1,13 @@
-use datafusion::arrow::datatypes::SchemaRef;
-use datafusion::common::Statistics;
+use datafusion::arrow::datatypes::{Schema, SchemaRef};
+use datafusion::common::{DataFusionError, Statistics};
 use datafusion::execution::context::TaskContext;
+use datafusion::execution::FunctionRegistry;
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::{
     DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
 };
+use datafusion_proto::physical_plan::PhysicalExtensionCodec;
+use prost::Message;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -57,6 +60,7 @@ impl ExecutionPlan for ShuffleWriterExec {
 pub struct ShuffleReaderExec {
     /// Query stage to read from
     pub stage_id: usize,
+    /// The output schema of the query stage being read from
     schema: SchemaRef,
 }
 
@@ -109,5 +113,43 @@ impl ExecutionPlan for ShuffleReaderExec {
 
     fn statistics(&self) -> Statistics {
         Statistics::default()
+    }
+}
+
+#[derive(Debug)]
+pub struct ShuffleCodec {}
+
+impl PhysicalExtensionCodec for ShuffleCodec {
+    fn try_decode(
+        &self,
+        buf: &[u8],
+        _inputs: &[Arc<dyn ExecutionPlan>],
+        _registry: &dyn FunctionRegistry,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        // decode bytes to protobuf struct
+        //TODO need a wrapper so we can handle reader and writer here
+        let reader = crate::protobuf::ShuffleReaderExecNode::decode(buf).map_err(|e| {
+            DataFusionError::Internal(format!("failed to decode shuffle reader plan: {e:?}"))
+        })?;
+        // create reader
+        Ok(Arc::new(ShuffleReaderExec::new(
+            1,
+            SchemaRef::new(Schema::empty()),
+        )))
+    }
+
+    fn try_encode(
+        &self,
+        node: Arc<dyn ExecutionPlan>,
+        buf: &mut Vec<u8>,
+    ) -> Result<(), DataFusionError> {
+        if let Some(reader) = node.as_any().downcast_ref::<ShuffleReaderExec>() {
+            let reader = crate::protobuf::ShuffleReaderExecNode { schema: None };
+            let mut buf: Vec<u8> = vec![];
+            reader.encode(&mut buf).unwrap(); // TODO error handling
+            Ok(())
+        } else {
+            todo!()
+        }
     }
 }
