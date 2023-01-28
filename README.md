@@ -11,7 +11,7 @@ framework. This project currently contains fewer than 500 lines of code.
 ## Features
 
 - Mature SQL support (CTEs, joins, subqueries, etc)
-- Support for CSV, Parquet, JSON, and Avro data sources
+- Support for CSV and Parquet files
 
 ## Limitations
 

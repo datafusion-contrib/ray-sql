@@ -1,8 +1,12 @@
 use crate::planner::{make_execution_graph, PyExecutionGraph};
+use crate::shuffle::ShuffleCodec;
 use crate::utils::wait_for_future;
 use datafusion::physical_plan::{displayable, ExecutionPlan};
 use datafusion::prelude::*;
-use datafusion_proto::bytes::{physical_plan_from_bytes, physical_plan_to_bytes};
+use datafusion_proto::bytes::{
+    physical_plan_from_bytes, physical_plan_from_bytes_with_extension_codec,
+    physical_plan_to_bytes, physical_plan_to_bytes_with_extension_codec,
+};
 use datafusion_python::physical_plan::PyExecutionPlan;
 use pyo3::prelude::*;
 use std::sync::Arc;
@@ -59,13 +63,15 @@ impl PyContext {
     }
 
     fn serialize_execution_plan(&self, plan: PyExecutionPlan) -> PyResult<Vec<u8>> {
-        Ok(physical_plan_to_bytes(plan.plan)?.to_vec())
+        let codec = ShuffleCodec {};
+        Ok(physical_plan_to_bytes_with_extension_codec(plan.plan, &codec)?.to_vec())
     }
 
     fn deserialize_execution_plan(&self, bytes: Vec<u8>) -> PyResult<PyExecutionPlan> {
-        Ok(PyExecutionPlan::new(physical_plan_from_bytes(
-            &bytes, &self.ctx,
-        )?))
+        let codec = ShuffleCodec {};
+        Ok(PyExecutionPlan::new(
+            physical_plan_from_bytes_with_extension_codec(&bytes, &self.ctx, &codec)?,
+        ))
     }
 
     /// Execute a partition of a query plan and write the results to disk

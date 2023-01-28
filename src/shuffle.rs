@@ -1,10 +1,12 @@
 use datafusion::arrow::datatypes::SchemaRef;
-use datafusion::common::Statistics;
+use datafusion::common::{DataFusionError, Statistics};
 use datafusion::execution::context::TaskContext;
+use datafusion::execution::FunctionRegistry;
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::{
     DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
 };
+use datafusion_proto::physical_plan::PhysicalExtensionCodec;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -57,6 +59,7 @@ impl ExecutionPlan for ShuffleWriterExec {
 pub struct ShuffleReaderExec {
     /// Query stage to read from
     pub stage_id: usize,
+    /// The output schema of the query stage being read from
     schema: SchemaRef,
 }
 
@@ -109,5 +112,27 @@ impl ExecutionPlan for ShuffleReaderExec {
 
     fn statistics(&self) -> Statistics {
         Statistics::default()
+    }
+}
+
+#[derive(Debug)]
+pub struct ShuffleCodec {}
+
+impl PhysicalExtensionCodec for ShuffleCodec {
+    fn try_decode(
+        &self,
+        buf: &[u8],
+        inputs: &[Arc<dyn ExecutionPlan>],
+        registry: &dyn FunctionRegistry,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        todo!()
+    }
+
+    fn try_encode(
+        &self,
+        node: Arc<dyn ExecutionPlan>,
+        buf: &mut Vec<u8>,
+    ) -> Result<(), DataFusionError> {
+        todo!()
     }
 }
