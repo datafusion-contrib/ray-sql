@@ -6,8 +6,8 @@ use datafusion::arrow::datatypes::{DataType, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::runtime_env::RuntimeEnv;
+use datafusion::physical_plan::displayable;
 use datafusion::physical_plan::memory::MemoryStream;
-use datafusion::physical_plan::{displayable, ExecutionPlan};
 use datafusion::prelude::*;
 use datafusion_proto::bytes::{
     physical_plan_from_bytes, physical_plan_from_bytes_with_extension_codec,
@@ -95,10 +95,12 @@ impl PyContext {
             HashMap::new(),
             Arc::new(RuntimeEnv::default()),
         ));
-        let mut stream = plan.plan.execute(part, ctx)?;
 
+        // create a Tokio runtime to run the async code
         let rt = Runtime::new().unwrap();
+
         let fut = rt.spawn(async move {
+            let mut stream = plan.plan.execute(part, ctx)?;
             while let Some(result) = stream.next().await {
                 let input_batch = result?;
                 println!("received batch with {} rows", input_batch.num_rows());

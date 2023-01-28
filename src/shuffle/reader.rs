@@ -60,7 +60,9 @@ impl ExecutionPlan for ShuffleReaderExec {
         context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
         // TODO read shuffle files from local storage
-        todo!()
+        Err(DataFusionError::Execution(
+            "shuffle reader not implemented yet".to_string(),
+        ))
     }
 
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
