@@ -1,4 +1,4 @@
-use crate::shuffle::ShuffleReaderExec;
+use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
 use datafusion::error::Result;
 use datafusion::physical_plan::file_format::CsvExec;
 use datafusion::physical_plan::repartition::RepartitionExec;
@@ -184,7 +184,8 @@ fn generate_query_stages(
             }
             &Partitioning::Hash(_, _) => {
                 // create a shuffle query stage for this repartition
-                let stage_id = graph.add_query_stage(plan.clone());
+                let shuffle_writer = ShuffleWriterExec::new(plan.clone());
+                let stage_id = graph.add_query_stage(Arc::new(shuffle_writer));
                 // replace the plan with a shuffle reader
                 Ok(Arc::new(ShuffleReaderExec::new(stage_id, plan.schema())))
             }
@@ -194,28 +195,3 @@ fn generate_query_stages(
         Ok(plan)
     }
 }
-
-//TODO handle these cases
-/*
-pub fn need_data_exchange(plan: Arc<dyn ExecutionPlan>) -> bool {
-    if let Some(repart) = plan.as_any().downcast_ref::<RepartitionExec>() {
-        !matches!(
-            repart.output_partitioning(),
-            Partitioning::RoundRobinBatch(_)
-        )
-    } else if let Some(coalesce) = plan.as_any().downcast_ref::<CoalescePartitionsExec>()
-    {
-        coalesce.input().output_partitioning().partition_count() > 1
-    } else if let Some(sort_preserving_merge) =
-        plan.as_any().downcast_ref::<SortPreservingMergeExec>()
-    {
-        sort_preserving_merge
-            .input()
-            .output_partitioning()
-            .partition_count()
-            > 1
-    } else {
-        false
-    }
-}
- */
