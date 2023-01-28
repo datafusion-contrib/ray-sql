@@ -22,6 +22,8 @@ class Worker:
 
 def execute_query_stage(ctx, graph, stage, workers):
 
+    # TODO make better use of futures here so that more runs in parallel
+
     # execute child stages first
     for child_id in stage.get_child_stage_ids():
         print(child_id)
@@ -36,7 +38,10 @@ def execute_query_stage(ctx, graph, stage, workers):
     futures = []
     for part in range(stage.get_input_partition_count()):
         futures.append(workers[part % len(workers)].execute_query_partition.remote(plan_bytes, part))
+
+    print("Waiting for query stage to complete")
     ray.get(futures)
+    print("Query stage has completed")
 
 
 if __name__ == "__main__":

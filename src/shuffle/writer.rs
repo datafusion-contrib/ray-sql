@@ -81,11 +81,12 @@ impl ExecutionPlan for ShuffleWriterExec {
         context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
         let mut stream = self.plan.execute(partition, context)?;
+        let file = format!("/tmp/raysql/{}_{partition}.arrow", self.stage_id);
         let write_time = MetricBuilder::new(&self.metrics).subset_time("write_time", partition);
         let results = async move {
             // stream the results from the query
-            println!("Executing query");
-            let stats = write_stream_to_disk(&mut stream, "/tmp/foo.arrow", &write_time).await?;
+            println!("Executing query and writing results to {file}");
+            let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
             println!(
                 "Query completed. Shuffle write time: {}. Rows: {}.",
                 write_time, stats.num_rows
@@ -113,7 +114,6 @@ impl ExecutionPlan for ShuffleWriterExec {
 }
 
 /// Stream data to disk in Arrow IPC format
-/// Copied from Ballista
 pub async fn write_stream_to_disk(
     stream: &mut Pin<Box<dyn RecordBatchStream + Send>>,
     path: &str,
