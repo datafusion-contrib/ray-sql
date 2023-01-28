@@ -2,10 +2,8 @@ use datafusion::arrow::array::Int32Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::ipc::writer::FileWriter;
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::common::{DataFusionError, Result, Statistics};
+use datafusion::common::{Result, Statistics};
 use datafusion::execution::context::TaskContext;
-use datafusion::execution::runtime_env::RuntimeEnv;
-use datafusion::execution::FunctionRegistry;
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::common::batch_byte_size;
 use datafusion::physical_plan::memory::MemoryStream;
@@ -15,11 +13,9 @@ use datafusion::physical_plan::{
     metrics, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
     SendableRecordBatchStream,
 };
-use datafusion_proto::physical_plan::PhysicalExtensionCodec;
 use datafusion_proto::protobuf::PartitionStats;
 use futures::StreamExt;
 use futures::TryStreamExt;
-use prost::Message;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::fs::File;

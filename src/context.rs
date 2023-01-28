@@ -10,8 +10,7 @@ use datafusion::physical_plan::displayable;
 use datafusion::physical_plan::memory::MemoryStream;
 use datafusion::prelude::*;
 use datafusion_proto::bytes::{
-    physical_plan_from_bytes, physical_plan_from_bytes_with_extension_codec,
-    physical_plan_to_bytes, physical_plan_to_bytes_with_extension_codec,
+    physical_plan_from_bytes_with_extension_codec, physical_plan_to_bytes_with_extension_codec,
 };
 use datafusion_python::physical_plan::PyExecutionPlan;
 use futures::StreamExt;
@@ -120,7 +119,7 @@ impl PyContext {
 
         // block and wait on future
         let x = rt.block_on(fut).unwrap(); // TODO error handling
-        let x = x?;
+        let _stream = x?;
 
         Ok(())
     }

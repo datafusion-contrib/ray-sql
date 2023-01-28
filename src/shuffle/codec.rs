@@ -3,26 +3,17 @@
 use crate::protobuf::ray_sql_exec_node::PlanType;
 use crate::protobuf::{RaySqlExecNode, ShuffleReaderExecNode, ShuffleWriterExecNode};
 use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
-use datafusion::arrow::datatypes::{Schema, SchemaRef};
-use datafusion::common::{DataFusionError, Statistics};
-use datafusion::execution::context::TaskContext;
+use datafusion::common::DataFusionError;
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::execution::FunctionRegistry;
 use datafusion::logical_expr::{AggregateUDF, ScalarUDF};
-use datafusion::parquet::record::Field;
-use datafusion::physical_expr::PhysicalSortExpr;
-use datafusion::physical_plan::{
-    DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
-};
-use datafusion_proto::common::proto_error;
+use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::physical_plan::AsExecutionPlan;
 use datafusion_proto::physical_plan::PhysicalExtensionCodec;
 use datafusion_proto::protobuf;
 use datafusion_proto::protobuf::PhysicalPlanNode;
 use prost::Message;
-use std::any::Any;
 use std::collections::HashSet;
-use std::fmt::Formatter;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -42,7 +33,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
             Some(PlanType::ShuffleReader(reader)) => {
                 let schema = reader.schema.as_ref().unwrap();
                 Ok(Arc::new(ShuffleReaderExec::new(
-                    1,
+                    0, //TODO
                     Arc::new(schema.try_into().unwrap()),
                 )))
             }
