@@ -1,0 +1,10 @@
+black
+flake8
+isort
+maturin
+mypy
+numpy
+pyarrow
+pytest
+toml
+importlib_metadata; python_version < "3.8"

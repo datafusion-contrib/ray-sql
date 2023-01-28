@@ -1,0 +1,25 @@
+[package]
+name = "raysql"
+description = "RaySQL: DataFusion on Ray"
+homepage = "https://github.com/andygrove/ray-sql"
+repository = "https://github.com/andygrove/ray-sql"
+authors = ["Andy Grove <andygrove73@gmail.com>"]
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+license = "Apache-2.0"
+rust-version = "1.62"
+
+[dependencies]
+datafusion = { git = "https://github.com/apache/arrow-datafusion", rev = "5238e8c97f998b4d2cb9fab85fb182f325a1a7fb", features = ["pyarrow", "avro"] }
+datafusion-proto = { git = "https://github.com/apache/arrow-datafusion", rev = "5238e8c97f998b4d2cb9fab85fb182f325a1a7fb" }
+datafusion-python = { path = "../../apache/arrow-datafusion-python" }
+pyo3 = { version = "~0.17.3", features = ["extension-module", "abi3", "abi3-py37"] }
+tokio = { version = "1.24", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+
+[lib]
+name = "raysql"
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.maturin]
+name = "raysql._raysql_internal"
