@@ -127,6 +127,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
         _registry: &dyn FunctionRegistry,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         // decode bytes to protobuf struct
+        //TODO need a wrapper so we can handle reader and writer here
         let reader = crate::protobuf::ShuffleReaderExecNode::decode(buf).map_err(|e| {
             DataFusionError::Internal(format!("failed to decode shuffle reader plan: {e:?}"))
         })?;
@@ -142,6 +143,13 @@ impl PhysicalExtensionCodec for ShuffleCodec {
         node: Arc<dyn ExecutionPlan>,
         buf: &mut Vec<u8>,
     ) -> Result<(), DataFusionError> {
-        todo!()
+        if let Some(reader) = node.as_any().downcast_ref::<ShuffleReaderExec>() {
+            let reader = crate::protobuf::ShuffleReaderExecNode { schema: None };
+            let mut buf: Vec<u8> = vec![];
+            reader.encode(&mut buf).unwrap(); // TODO error handling
+            Ok(())
+        } else {
+            todo!()
+        }
     }
 }
