@@ -1,11 +1,8 @@
 use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
 use datafusion::error::Result;
-use datafusion::physical_plan::file_format::CsvExec;
 use datafusion::physical_plan::repartition::RepartitionExec;
 use datafusion::physical_plan::Partitioning;
-use datafusion::physical_plan::{
-    need_data_exchange, with_new_children_if_necessary, ExecutionPlan,
-};
+use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use datafusion_python::physical_plan::PyExecutionPlan;
 use pyo3::prelude::*;
 use std::collections::HashMap;
@@ -97,6 +94,10 @@ impl PyQueryStage {
 
 #[pymethods]
 impl PyQueryStage {
+    pub fn id(&self) -> usize {
+        self.stage.id
+    }
+
     pub fn get_execution_plan(&self) -> PyExecutionPlan {
         PyExecutionPlan::new(self.stage.plan.clone())
     }

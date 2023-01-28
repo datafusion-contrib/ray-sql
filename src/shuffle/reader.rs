@@ -1,16 +1,20 @@
 use datafusion::arrow::datatypes::{Schema, SchemaRef};
-use datafusion::common::{DataFusionError, Statistics};
+use datafusion::arrow::ipc::reader::FileReader;
+use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::common::Statistics;
 use datafusion::execution::context::TaskContext;
-use datafusion::execution::FunctionRegistry;
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::{
-    DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
+    DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream, SendableRecordBatchStream,
 };
-use datafusion_proto::physical_plan::PhysicalExtensionCodec;
+use futures::Stream;
 use prost::Message;
 use std::any::Any;
 use std::fmt::Formatter;
+use std::fs::File;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 #[derive(Debug)]
 pub struct ShuffleReaderExec {
@@ -57,12 +61,12 @@ impl ExecutionPlan for ShuffleReaderExec {
     fn execute(
         &self,
         partition: usize,
-        context: Arc<TaskContext>,
+        _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        // TODO read shuffle files from local storage
-        Err(DataFusionError::Execution(
-            "shuffle reader not implemented yet".to_string(),
-        ))
+        let file = format!("/tmp/raysql/{}_{partition}.arrow", self.stage_id);
+        println!("Shuffle reader reading from {file}");
+        let reader = FileReader::try_new(File::open(&file)?, None)?;
+        Ok(Box::pin(LocalShuffleStream::new(reader)))
     }
 
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
@@ -71,5 +75,32 @@ impl ExecutionPlan for ShuffleReaderExec {
 
     fn statistics(&self) -> Statistics {
         Statistics::default()
+    }
+}
+
+struct LocalShuffleStream {
+    reader: FileReader<File>,
+}
+
+impl LocalShuffleStream {
+    pub fn new(reader: FileReader<File>) -> Self {
+        LocalShuffleStream { reader }
+    }
+}
+
+impl Stream for LocalShuffleStream {
+    type Item = datafusion::arrow::error::Result<RecordBatch>;
+
+    fn poll_next(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if let Some(batch) = self.reader.next() {
+            return Poll::Ready(Some(batch));
+        }
+        Poll::Ready(None)
+    }
+}
+
+impl RecordBatchStream for LocalShuffleStream {
+    fn schema(&self) -> SchemaRef {
+        self.reader.schema()
     }
 }

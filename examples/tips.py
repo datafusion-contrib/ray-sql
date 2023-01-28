@@ -26,22 +26,23 @@ def execute_query_stage(ctx, graph, stage, workers):
 
     # execute child stages first
     for child_id in stage.get_child_stage_ids():
-        print(child_id)
         child_stage = graph.get_query_stage(child_id)
         execute_query_stage(ctx, graph, child_stage, workers)
 
-    print("scheduling query stage", stage)
+    print("Scheduling query stage #{}".format(stage.id()))
 
+    # serialize the plan
     plan_bytes = ctx.serialize_execution_plan(stage.get_execution_plan())
 
     # round-robin allocation across workers
     futures = []
     for part in range(stage.get_input_partition_count()):
-        futures.append(workers[part % len(workers)].execute_query_partition.remote(plan_bytes, part))
+        worker_index = part % len(workers)
+        futures.append(workers[worker_index].execute_query_partition.remote(plan_bytes, part))
 
-    print("Waiting for query stage to complete")
-    ray.get(futures)
-    print("Query stage has completed")
+    print("Waiting for query stage #{} to complete".format(stage.id()))
+    print(ray.get(futures))
+    print("Query stage #{} has completed".format(stage.id()))
 
 
 if __name__ == "__main__":
@@ -49,11 +50,9 @@ if __name__ == "__main__":
     ray.init()
 
     # create some remote Workers
-    workers = [
-        Worker.remote(),
-        Worker.remote()
-    ]
+    workers = [Worker.remote() for i in range(2)]
 
+    # create context and plan a query
     ctx = Context()
     ctx.register_csv('tips', 'tips.csv', True)
     graph = ctx.plan('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
