@@ -3,27 +3,40 @@ syntax = "proto3";
 package raysql.protobuf;
 
 option java_multiple_files = true;
-option java_package = "org.apache.arrow.ballista.protobuf";
-option java_outer_classname = "BallistaProto";
+option java_package = "raysql.protobuf";
+option java_outer_classname = "RaySqlProto";
 
 import "datafusion.proto";
 
-message ShuffleReaderExecNode {
-//  repeated PartitionId partition = 1;
-  datafusion.Schema schema = 2;
+message RaySqlExecNode {
+  oneof PlanType {
+    ShuffleReaderExecNode shuffle_reader = 1;
+    ShuffleWriterExecNode shuffle_writer = 2;
+  }
 }
 
-//
-message ShuffleWriterExecNode {
+message ShuffleReaderExecNode {
+  // stage to read from
   uint32 stage_id = 1;
-//  Partitioning output_partitioning = 2;
+  // partition to read - this is the *output* partition of the shuffle stage
+  uint32 partition = 2;
+  // schema of the shuffle stage
+  datafusion.Schema schema = 3;
+  // this must match the output partitions of the writer we are reading from
+  uint32 num_output_partitions = 4;
+  // directory for shuffle files
+  string shuffle_dir = 5;
 }
-//
-//message PartitionId {
-//
-//}
-//
-//message Partitioning {
-//  repeated datafusion.PhysicalExprNode hash_expr = 1;
-//  uint64 partition_count = 2;
-//}
+
+message ShuffleWriterExecNode {
+  // stage that is writing the shuffle files
+  uint32 stage_id = 1;
+  // plan to execute
+  datafusion.PhysicalPlanNode plan = 2;
+  // how to partition - can be empty
+  repeated datafusion.PhysicalExprNode partition_expr = 3;
+  // number of output partitions
+  uint32 num_output_partitions = 4;
+  // directory for shuffle files
+  string shuffle_dir = 5;
+}
