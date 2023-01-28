@@ -33,8 +33,10 @@ def execute_query_stage(ctx, graph, stage, workers):
     plan_bytes = ctx.serialize_execution_plan(stage.get_execution_plan())
 
     # round-robin allocation across workers
+    futures = []
     for part in range(stage.get_input_partition_count()):
-        workers[part % len(workers)].execute_query_partition.remote(plan_bytes, part)
+        futures.append(workers[part % len(workers)].execute_query_partition.remote(plan_bytes, part))
+    ray.get(futures)
 
 
 if __name__ == "__main__":
