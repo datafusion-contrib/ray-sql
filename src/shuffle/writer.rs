@@ -16,18 +16,18 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use prost::Message;
 use std::any::Any;
-use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct ShuffleWriterExec {
+    pub stage_id: usize,
     pub(crate) plan: Arc<dyn ExecutionPlan>,
 }
 
 impl ShuffleWriterExec {
-    pub fn new(plan: Arc<dyn ExecutionPlan>) -> Self {
-        Self { plan }
+    pub fn new(stage_id: usize, plan: Arc<dyn ExecutionPlan>) -> Self {
+        Self { stage_id, plan }
     }
 }
 
@@ -59,6 +59,10 @@ impl ExecutionPlan for ShuffleWriterExec {
         unimplemented!()
     }
 
+    fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ShuffleWriterExec(stage_id={})", self.stage_id)
+    }
+
     fn execute(
         &self,
         partition: usize,
@@ -67,12 +71,14 @@ impl ExecutionPlan for ShuffleWriterExec {
         let mut stream = self.plan.execute(partition, context)?;
         let results = async move {
             // stream the results from the query
+            println!("Executing query");
             while let Some(result) = stream.next().await {
                 let input_batch = result?;
                 println!("received batch with {} rows", input_batch.num_rows());
 
                 // TODO write to disk (copy code from Ballista)
             }
+            println!("Query completed");
 
             // create a dummy batch to return - later this could be metadata about the
             // shuffle partitions that were written out

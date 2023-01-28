@@ -39,10 +39,13 @@ impl PhysicalExtensionCodec for ShuffleCodec {
         let node = RaySqlExecNode::decode(buf)
             .map_err(|e| DataFusionError::Internal(format!("failed to decode plan: {e:?}")))?;
         match node.plan_type {
-            Some(PlanType::ShuffleReader(reader)) => Ok(Arc::new(ShuffleReaderExec::new(
-                1,
-                SchemaRef::new(Schema::empty()),
-            ))),
+            Some(PlanType::ShuffleReader(reader)) => {
+                let schema = reader.schema.as_ref().unwrap();
+                Ok(Arc::new(ShuffleReaderExec::new(
+                    1,
+                    Arc::new(schema.try_into().unwrap()),
+                )))
+            }
             Some(PlanType::ShuffleWriter(writer)) => {
                 let function_registry = RaySqlFunctionRegistry {};
                 let plan = writer.plan.unwrap().try_into_physical_plan(
@@ -50,7 +53,10 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                     &RuntimeEnv::default(),
                     self,
                 )?;
-                Ok(Arc::new(ShuffleWriterExec::new(plan)))
+                Ok(Arc::new(ShuffleWriterExec::new(
+                    writer.stage_id as usize,
+                    plan,
+                )))
             }
             _ => unreachable!(),
         }

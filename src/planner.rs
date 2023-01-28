@@ -61,8 +61,7 @@ impl ExecutionGraph {
         }
     }
 
-    fn add_query_stage(&mut self, plan: Arc<dyn ExecutionPlan>) -> usize {
-        let stage_id = self.next_id();
+    fn add_query_stage(&mut self, stage_id: usize, plan: Arc<dyn ExecutionPlan>) -> usize {
         let query_stage = QueryStage::new(stage_id, plan);
         self.query_stages.insert(stage_id, Arc::new(query_stage));
         stage_id
@@ -72,7 +71,7 @@ impl ExecutionGraph {
         // the final query stage is always the last to be created and
         // therefore has the highest id
         let mut max_id = 0;
-        for (k, v) in &self.query_stages {
+        for (k, _) in &self.query_stages {
             if *k > max_id {
                 max_id = *k;
             }
@@ -158,7 +157,7 @@ fn collect_input_partition_count(plan: &dyn ExecutionPlan) -> usize {
 pub fn make_execution_graph(plan: Arc<dyn ExecutionPlan>) -> Result<ExecutionGraph> {
     let mut graph = ExecutionGraph::new();
     let root = generate_query_stages(plan, &mut graph)?;
-    graph.add_query_stage(root);
+    graph.add_query_stage(graph.next_id(), root);
     Ok(graph)
 }
 
@@ -184,8 +183,9 @@ fn generate_query_stages(
             }
             &Partitioning::Hash(_, _) => {
                 // create a shuffle query stage for this repartition
-                let shuffle_writer = ShuffleWriterExec::new(plan.clone());
-                let stage_id = graph.add_query_stage(Arc::new(shuffle_writer));
+                let stage_id = graph.next_id();
+                let shuffle_writer = ShuffleWriterExec::new(stage_id, plan.clone());
+                let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
                 // replace the plan with a shuffle reader
                 Ok(Arc::new(ShuffleReaderExec::new(stage_id, plan.schema())))
             }
