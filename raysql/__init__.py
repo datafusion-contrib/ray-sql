@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from typing import List
 
+
 try:
     import importlib.metadata as importlib_metadata
 except ImportError:
