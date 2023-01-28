@@ -45,7 +45,9 @@ pub struct ShuffleWriterExecNode {
     pub plan: ::core::option::Option<::datafusion_proto::protobuf::PhysicalPlanNode>,
     /// how to partition - can be empty
     #[prost(message, repeated, tag = "3")]
-    pub partition_expr: ::prost::alloc::vec::Vec<::datafusion_proto::protobuf::PhysicalExprNode>,
+    pub partition_expr: ::prost::alloc::vec::Vec<
+        ::datafusion_proto::protobuf::PhysicalExprNode,
+    >,
     /// number of output partitions
     #[prost(uint32, tag = "4")]
     pub num_output_partitions: u32,
