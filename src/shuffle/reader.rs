@@ -10,6 +10,7 @@ use datafusion::physical_plan::{
 };
 use futures::Stream;
 use glob::glob;
+use log::debug;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::fs::File;
@@ -64,12 +65,12 @@ impl ExecutionPlan for ShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        // TODO remove hard-coded path
+        // TODO remove hard-coded path  
         let pattern = format!("/tmp/raysql/shuffle_{}_*_{partition}.arrow", self.stage_id);
         let mut streams: Vec<SendableRecordBatchStream> = vec![];
         for entry in glob(&pattern).expect("Failed to read glob pattern") {
             let file = entry.unwrap();
-            println!("Shuffle reader reading from {}", file.display());
+            debug!("Shuffle reader reading from {}", file.display());
             let reader = FileReader::try_new(File::open(&file)?, None)?;
             streams.push(Box::pin(LocalShuffleStream::new(reader)));
         }

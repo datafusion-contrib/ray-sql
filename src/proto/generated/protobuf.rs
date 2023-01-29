@@ -21,17 +21,14 @@ pub struct ShuffleReaderExecNode {
     /// stage to read from
     #[prost(uint32, tag = "1")]
     pub stage_id: u32,
-    /// partition to read - this is the *output* partition of the shuffle stage
-    #[prost(uint32, tag = "2")]
-    pub partition: u32,
     /// schema of the shuffle stage
-    #[prost(message, optional, tag = "3")]
+    #[prost(message, optional, tag = "2")]
     pub schema: ::core::option::Option<::datafusion_proto::protobuf::Schema>,
     /// this must match the output partitions of the writer we are reading from
-    #[prost(uint32, tag = "4")]
+    #[prost(uint32, tag = "3")]
     pub num_output_partitions: u32,
     /// directory for shuffle files
-    #[prost(string, tag = "5")]
+    #[prost(string, tag = "4")]
     pub shuffle_dir: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -43,13 +40,12 @@ pub struct ShuffleWriterExecNode {
     /// plan to execute
     #[prost(message, optional, tag = "2")]
     pub plan: ::core::option::Option<::datafusion_proto::protobuf::PhysicalPlanNode>,
-    /// hash partition expressions
-    #[prost(message, repeated, tag = "3")]
-    pub partition_expr: ::prost::alloc::vec::Vec<::datafusion_proto::protobuf::PhysicalExprNode>,
-    /// number of output partitions
-    #[prost(uint32, tag = "4")]
-    pub num_output_partitions: u32,
+    /// output partitioning schema
+    #[prost(message, optional, tag = "3")]
+    pub partitioning: ::core::option::Option<
+        ::datafusion_proto::protobuf::PhysicalHashRepartition,
+    >,
     /// directory for shuffle files
-    #[prost(string, tag = "5")]
+    #[prost(string, tag = "4")]
     pub shuffle_dir: ::prost::alloc::string::String,
 }

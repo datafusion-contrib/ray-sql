@@ -18,14 +18,12 @@ message RaySqlExecNode {
 message ShuffleReaderExecNode {
   // stage to read from
   uint32 stage_id = 1;
-  // partition to read - this is the *output* partition of the shuffle stage
-  uint32 partition = 2;
   // schema of the shuffle stage
-  datafusion.Schema schema = 3;
+  datafusion.Schema schema = 2;
   // this must match the output partitions of the writer we are reading from
-  uint32 num_output_partitions = 4;
+  uint32 num_output_partitions = 3;
   // directory for shuffle files
-  string shuffle_dir = 5;
+  string shuffle_dir = 4;
 }
 
 message ShuffleWriterExecNode {
@@ -33,10 +31,8 @@ message ShuffleWriterExecNode {
   uint32 stage_id = 1;
   // plan to execute
   datafusion.PhysicalPlanNode plan = 2;
-  // hash partition expressions
-  repeated datafusion.PhysicalExprNode partition_expr = 3;
-  // number of output partitions
-  uint32 num_output_partitions = 4;
+  // output partitioning schema
+  datafusion.PhysicalHashRepartition partitioning = 3;
   // directory for shuffle files
-  string shuffle_dir = 5;
+  string shuffle_dir = 4;
 }

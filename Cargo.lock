@@ -2082,6 +2082,7 @@ dependencies = [
  "datafusion-python",
  "futures",
  "glob",
+ "log",
  "prost 0.11.6",
  "prost-types 0.11.6",
  "pyo3",
