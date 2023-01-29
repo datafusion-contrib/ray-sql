@@ -189,7 +189,11 @@ fn generate_query_stages(
             &Partitioning::Hash(_, _) => {
                 // create a shuffle query stage for this repartition
                 let stage_id = graph.next_id();
-                let shuffle_writer = ShuffleWriterExec::new(stage_id, plan.clone());
+                // we remove the RepartitionExec because it isn't designed for our
+                // distributed use case and the ShuffleWriterExec contains the repartitioning
+                // logic
+                let shuffle_writer_input = plan.children()[0].clone();
+                let shuffle_writer = ShuffleWriterExec::new(stage_id, shuffle_writer_input);
                 let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
                 // replace the plan with a shuffle reader
                 Ok(Arc::new(ShuffleReaderExec::new(stage_id, plan.schema())))

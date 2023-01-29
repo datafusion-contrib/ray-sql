@@ -12,6 +12,9 @@ workers = [Worker.remote() for i in range(2)]
 ctx = RaySqlContext(workers)
 ctx.register_csv('tips', 'tips.csv', True)
 
-ctx.sql('select day, sum(total_bill) from tips group by day')
+# Parquet is also supported
+# ctx.register_parquet('tips', 'tips.parquet')
 
-#ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+
+# ctx.sql('select day, sum(total_bill) from tips group by day')
