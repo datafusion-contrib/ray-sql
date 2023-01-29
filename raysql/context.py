@@ -4,7 +4,7 @@ from raysql import Context
 class RaySqlContext:
 
     def __init__(self, workers):
-        self.ctx = Context()
+        self.ctx = Context(len(workers))
         self.workers = workers
 
     def register_csv(self, table_name, path, has_header):
@@ -29,7 +29,12 @@ class RaySqlContext:
             child_stage = graph.get_query_stage(child_id)
             self.execute_query_stage(graph, child_stage)
 
-        partition_count = stage.get_input_partition_count()
+        # todo what is correct logic here?
+        if stage.get_output_partition_count == 1:
+            partition_count = 1
+        else:
+            partition_count = stage.get_input_partition_count()
+
         print("Scheduling query stage #{} with {} input partitions and {} output partitions".format(stage.id(), partition_count, stage.get_output_partition_count()))
 
         # serialize the plan

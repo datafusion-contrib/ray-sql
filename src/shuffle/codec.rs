@@ -55,15 +55,11 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                     registry,
                     plan.schema().as_ref(),
                 )?;
-                match hash_part {
-                    Some(Partitioning::Hash(expr, count)) => Ok(Arc::new(ShuffleWriterExec::new(
-                        writer.stage_id as usize,
-                        plan,
-                        expr,
-                        count as usize,
-                    ))),
-                    _ => todo!(),
-                }
+                Ok(Arc::new(ShuffleWriterExec::new(
+                    writer.stage_id as usize,
+                    plan,
+                    hash_part.unwrap(),
+                )))
             }
             _ => unreachable!(),
         }
@@ -111,7 +107,14 @@ fn encode_partitioning_scheme(partitioning: &Partitioning) -> Result<PhysicalHas
                 .collect::<Result<Vec<_>, DataFusionError>>()?,
             partition_count: *partition_count as u64,
         }),
-        _ => todo!("unsupported shuffle partitioning scheme"),
+        Partitioning::UnknownPartitioning(1) => Ok(protobuf::PhysicalHashRepartition {
+            hash_expr: vec![],
+            partition_count: 1,
+        }),
+        other => Err(DataFusionError::Plan(format!(
+            "Unsupported shuffle partitioning scheme: {:?}",
+            other
+        ))),
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
 use datafusion::error::Result;
+use datafusion::physical_plan::coalesce_partitions::CoalescePartitionsExec;
 use datafusion::physical_plan::repartition::RepartitionExec;
 use datafusion::physical_plan::Partitioning;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
@@ -166,6 +167,7 @@ pub fn make_execution_graph(plan: Arc<dyn ExecutionPlan>) -> Result<ExecutionGra
     Ok(graph)
 }
 
+/// Replace RepartitionExec and CoalescePartitionExec with ShuffleWriterExec/ShuffleReaderExec
 fn generate_query_stages(
     plan: Arc<dyn ExecutionPlan>,
     graph: &mut ExecutionGraph,
@@ -180,38 +182,48 @@ fn generate_query_stages(
 
     if let Some(repart) = plan.as_any().downcast_ref::<RepartitionExec>() {
         match repart.partitioning() {
-            &Partitioning::RoundRobinBatch(_) => {
-                // DataFusion adds round-robin partitioning to increase parallelism
-                // but that doesn't make so much sense for distributed because it
-                // introduces unnecessary shuffle overhead
-                Ok(plan.children()[0].clone())
+            &Partitioning::UnknownPartitioning(_) => {
+                // just remove this
+                Ok(repart.children()[0].clone())
             }
-            &Partitioning::Hash(ref part_expr, part_count) => {
+            partitioning_scheme => {
                 // create a shuffle query stage for this repartition
                 let stage_id = graph.next_id();
-                // we remove the RepartitionExec because it isn't designed for our
-                // distributed use case and the ShuffleWriterExec contains the repartitioning
-                // logic
                 let shuffle_writer_input = plan.children()[0].clone();
                 let shuffle_writer = ShuffleWriterExec::new(
                     stage_id,
                     shuffle_writer_input,
-                    part_expr.to_vec(),
-                    part_count,
+                    partitioning_scheme.clone(),
                 );
                 let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
                 // replace the plan with a shuffle reader
                 Ok(Arc::new(ShuffleReaderExec::new(
                     stage_id,
                     plan.schema(),
-                    repart.partitioning().clone(),
+                    partitioning_scheme.clone(),
                 )))
             }
-            &Partitioning::UnknownPartitioning(_) => {
-                // remove UnknownPartitioning repartitions
-                Ok(plan.children()[0].clone())
-            }
         }
+    } else if plan
+        .as_any()
+        .downcast_ref::<CoalescePartitionsExec>()
+        .is_some()
+    {
+        // introduce shuffle to produce one output partition
+        let stage_id = graph.next_id();
+        let shuffle_writer_input = plan.children()[0].clone();
+        let shuffle_writer = ShuffleWriterExec::new(
+            stage_id,
+            shuffle_writer_input,
+            Partitioning::UnknownPartitioning(1),
+        );
+        let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
+        // replace the plan with a shuffle reader
+        Ok(Arc::new(ShuffleReaderExec::new(
+            stage_id,
+            plan.schema(),
+            Partitioning::UnknownPartitioning(1),
+        )))
     } else {
         Ok(plan)
     }

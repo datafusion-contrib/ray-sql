@@ -4,7 +4,7 @@ from raysql import Context
 @ray.remote
 class Worker:
     def __init__(self):
-        self.ctx = Context()
+        self.ctx = Context(1)
 
     def execute_query_partition(self, plan_bytes, part):
         plan = self.ctx.deserialize_execution_plan(plan_bytes)

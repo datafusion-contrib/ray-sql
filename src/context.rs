@@ -1,7 +1,7 @@
 use crate::planner::{make_execution_graph, PyExecutionGraph};
 use crate::shuffle::ShuffleCodec;
 use crate::utils::wait_for_future;
-use datafusion::arrow::array::Int32Array;
+use datafusion::arrow::array::UInt32Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
@@ -29,8 +29,8 @@ pub struct PyContext {
 #[pymethods]
 impl PyContext {
     #[new]
-    pub fn new() -> Self {
-        let config = SessionConfig::default().with_target_partitions(4);
+    pub fn new(target_partitions: usize) -> Self {
+        let config = SessionConfig::default().with_target_partitions(target_partitions);
         Self {
             ctx: SessionContext::with_config(config),
         }
@@ -63,7 +63,7 @@ impl PyContext {
 
         // debug logging
         for stage in graph.query_stages.values() {
-            debug!(
+            println!(
                 "Query stage #{}:\n{}",
                 stage.id,
                 displayable(stage.plan.as_ref()).indent()
@@ -102,21 +102,32 @@ impl PyContext {
         let fut = rt.spawn(async move {
             let mut stream = plan.plan.execute(part, ctx)?;
             let mut results = vec![];
+            let mut row_count = 0_u32;
             while let Some(result) = stream.next().await {
                 let input_batch = result?;
+                row_count += 1;
                 results.push(input_batch);
             }
 
             println!("Results:\n{}", pretty_format_batches(&results)?);
 
-            // TODO remove this dummy batch
-            // create a dummy batch to return - later this could be metadata about the
-            // shuffle partitions that were written out
-            let schema = Arc::new(Schema::new(vec![Field::new("foo", DataType::Int32, true)]));
-            let array = Int32Array::from(vec![42]);
-            let batch = RecordBatch::try_new(schema.clone(), vec![Arc::new(array)])?;
-
-            // return as a stream
+            // return a result set with metadata about this executed partition
+            let schema = Arc::new(Schema::new(vec![
+                Field::new("partition_index", DataType::UInt32, true),
+                Field::new("partition_batches", DataType::UInt32, true),
+                Field::new("partition_rows", DataType::UInt32, true),
+            ]));
+            let part_index = UInt32Array::from(vec![part as u32]);
+            let part_batches = UInt32Array::from(vec![results.len() as u32]);
+            let part_rows = UInt32Array::from(vec![row_count]);
+            let batch = RecordBatch::try_new(
+                schema.clone(),
+                vec![
+                    Arc::new(part_index),
+                    Arc::new(part_batches),
+                    Arc::new(part_rows),
+                ],
+            )?;
             MemoryStream::try_new(vec![batch], schema, None)
         });
 

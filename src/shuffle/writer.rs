@@ -12,7 +12,7 @@ use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder}
 use datafusion::physical_plan::repartition::BatchPartitioner;
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
-    metrics, DisplayFormatType, ExecutionPlan, Partitioning, PhysicalExpr, RecordBatchStream,
+    metrics, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
     SendableRecordBatchStream,
 };
 use datafusion_proto::protobuf::PartitionStats;
@@ -30,23 +30,17 @@ use std::sync::Arc;
 pub struct ShuffleWriterExec {
     pub stage_id: usize,
     pub(crate) plan: Arc<dyn ExecutionPlan>,
-    pub hash_expr: Vec<Arc<dyn PhysicalExpr>>,
-    pub output_partition_count: usize,
+    /// Output partitioning
+    partitioning: Partitioning,
     pub metrics: ExecutionPlanMetricsSet,
 }
 
 impl ShuffleWriterExec {
-    pub fn new(
-        stage_id: usize,
-        plan: Arc<dyn ExecutionPlan>,
-        hash_expr: Vec<Arc<dyn PhysicalExpr>>,
-        output_partition_count: usize,
-    ) -> Self {
+    pub fn new(stage_id: usize, plan: Arc<dyn ExecutionPlan>, partitioning: Partitioning) -> Self {
         Self {
             stage_id,
             plan,
-            hash_expr,
-            output_partition_count,
+            partitioning,
             metrics: ExecutionPlanMetricsSet::new(),
         }
     }
@@ -62,7 +56,7 @@ impl ExecutionPlan for ShuffleWriterExec {
     }
 
     fn output_partitioning(&self) -> Partitioning {
-        Partitioning::Hash(self.hash_expr.clone(), self.output_partition_count)
+        self.partitioning.clone()
     }
 
     fn output_ordering(&self) -> Option<&[PhysicalSortExpr]> {
@@ -82,7 +76,11 @@ impl ExecutionPlan for ShuffleWriterExec {
     }
 
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ShuffleWriterExec(stage_id={})", self.stage_id)
+        write!(
+            f,
+            "ShuffleWriterExec(stage_id={}, output_partitioning={:?})",
+            self.stage_id, self.partitioning
+        )
     }
 
     fn execute(
@@ -185,9 +183,16 @@ impl ExecutionPlan for ShuffleWriterExec {
 
             // create a dummy batch to return - later this could be metadata about the
             // shuffle partitions that were written out
-            let schema = Arc::new(Schema::new(vec![Field::new("foo", DataType::Int32, true)]));
-            let array = Int32Array::from(vec![42]);
-            let batch = RecordBatch::try_new(schema.clone(), vec![Arc::new(array)])?;
+            let schema = Arc::new(Schema::new(vec![
+                Field::new("shuffle_repart_time", DataType::Int32, true),
+                Field::new("shuffle_write_time", DataType::Int32, true),
+            ]));
+            let arr_repart_time = Int32Array::from(vec![repart_time.value() as i32]);
+            let arr_write_time = Int32Array::from(vec![write_time.value() as i32]);
+            let batch = RecordBatch::try_new(
+                schema.clone(),
+                vec![Arc::new(arr_repart_time), Arc::new(arr_write_time)],
+            )?;
 
             // return as a stream
             MemoryStream::try_new(vec![batch], schema, None)
