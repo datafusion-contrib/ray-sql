@@ -44,7 +44,7 @@ This chart shows the relative performance of RaySQL compared to other open-sourc
 Only a few queries work, and performance does not look very promising so far, but this may just be because of the naïve 
 distributed planner introducing unnecessary shuffles. 
 
-![SQLBench-H Performance Chart](https://sqlbenchmarks.io/sqlbench-h/results/env/workstation/sf10/distributed/sqlbench-h-workstation-10-distributed-perquery.png)
+![SQLBench-H Performance Chart](./docs/sqlbench-h-workstation-10-distributed-perquery.png)
 
 ## Building
 
