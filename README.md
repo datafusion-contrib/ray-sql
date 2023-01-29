@@ -26,7 +26,7 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 ## Status
 
-- Partially working. Can run a few TPC-H queries.
+- Partially working. Can run about half of the TPC-H benchmark queries.
 
 ## Features
 
@@ -41,8 +41,8 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 This chart shows the relative performance of RaySQL compared to other open-source distributed SQL frameworks.
 
-Only a few queries work, and performance does not look very promising so far, but this may just be because of the naïve 
-distributed planner introducing unnecessary shuffles. 
+Performance does not look very promising so far, but this project was created in one weekend, so this is probably not 
+too bad a start.
 
 ![SQLBench-H Performance Chart](./docs/sqlbench-h-workstation-10-distributed-perquery.png)
 
