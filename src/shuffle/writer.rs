@@ -66,7 +66,7 @@ impl ExecutionPlan for ShuffleWriterExec {
     fn with_new_children(
         self: Arc<Self>,
         _: Vec<Arc<dyn ExecutionPlan>>,
-    ) -> datafusion::common::Result<Arc<dyn ExecutionPlan>> {
+    ) -> Result<Arc<dyn ExecutionPlan>> {
         unimplemented!()
     }
 
@@ -78,7 +78,7 @@ impl ExecutionPlan for ShuffleWriterExec {
         &self,
         input_partition: usize,
         context: Arc<TaskContext>,
-    ) -> datafusion::common::Result<SendableRecordBatchStream> {
+    ) -> Result<SendableRecordBatchStream> {
         println!("ShuffleWriteExec::execute(input_partition={input_partition})");
 
         let mut stream = self.plan.execute(input_partition, context)?;
@@ -95,7 +95,10 @@ impl ExecutionPlan for ShuffleWriterExec {
             if partition_count == 1 {
                 // stream the results from the query
                 // TODO remove hard-coded path
-                let file = format!("/tmp/raysql/stage_{}_part_0.arrow", stage_id);
+                let file = format!(
+                    "/tmp/raysql/shuffle_{}_{}_0.arrow",
+                    stage_id, input_partition
+                );
                 println!("Executing query and writing results to {file}");
                 let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
                 println!(
@@ -133,8 +136,8 @@ impl ExecutionPlan for ShuffleWriterExec {
                             None => {
                                 // TODO remove hard-coded path
                                 let path = format!(
-                                    "/tmp/raysql/stage_{}_part_{}.arrow",
-                                    stage_id, output_partition
+                                    "/tmp/raysql/shuffle_{}_{}_{}.arrow",
+                                    stage_id, input_partition, output_partition
                                 );
                                 let path = Path::new(&path);
                                 println!("Writing results to {:?}", path);

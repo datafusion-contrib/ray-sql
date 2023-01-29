@@ -33,7 +33,7 @@ message ShuffleWriterExecNode {
   uint32 stage_id = 1;
   // plan to execute
   datafusion.PhysicalPlanNode plan = 2;
-  // how to partition - can be empty
+  // hash partition expressions
   repeated datafusion.PhysicalExprNode partition_expr = 3;
   // number of output partitions
   uint32 num_output_partitions = 4;

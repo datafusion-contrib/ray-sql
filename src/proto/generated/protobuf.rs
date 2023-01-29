@@ -43,11 +43,9 @@ pub struct ShuffleWriterExecNode {
     /// plan to execute
     #[prost(message, optional, tag = "2")]
     pub plan: ::core::option::Option<::datafusion_proto::protobuf::PhysicalPlanNode>,
-    /// how to partition - can be empty
+    /// hash partition expressions
     #[prost(message, repeated, tag = "3")]
-    pub partition_expr: ::prost::alloc::vec::Vec<
-        ::datafusion_proto::protobuf::PhysicalExprNode,
-    >,
+    pub partition_expr: ::prost::alloc::vec::Vec<::datafusion_proto::protobuf::PhysicalExprNode>,
     /// number of output partitions
     #[prost(uint32, tag = "4")]
     pub num_output_partitions: u32,
