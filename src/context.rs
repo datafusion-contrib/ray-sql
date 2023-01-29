@@ -15,6 +15,7 @@ use datafusion_proto::bytes::{
 };
 use datafusion_python::physical_plan::PyExecutionPlan;
 use futures::StreamExt;
+use log::debug;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -54,7 +55,7 @@ impl PyContext {
     }
 
     pub fn plan(&self, sql: &str, py: Python) -> PyResult<PyExecutionGraph> {
-        println!("Planning {}", sql);
+        debug!("Planning {}", sql);
         let df = wait_for_future(py, self.ctx.sql(sql))?;
         let plan = wait_for_future(py, df.create_physical_plan())?;
 
@@ -62,7 +63,7 @@ impl PyContext {
 
         // debug logging
         for stage in graph.query_stages.values() {
-            println!(
+            debug!(
                 "Query stage #{}:\n{}",
                 stage.id,
                 displayable(stage.plan.as_ref()).indent()

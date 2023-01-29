@@ -12,12 +12,13 @@ use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder}
 use datafusion::physical_plan::repartition::BatchPartitioner;
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
-    metrics, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
+    metrics, DisplayFormatType, ExecutionPlan, Partitioning, PhysicalExpr, RecordBatchStream,
     SendableRecordBatchStream,
 };
 use datafusion_proto::protobuf::PartitionStats;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use log::debug;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::fs::File;
@@ -29,14 +30,23 @@ use std::sync::Arc;
 pub struct ShuffleWriterExec {
     pub stage_id: usize,
     pub(crate) plan: Arc<dyn ExecutionPlan>,
+    pub hash_expr: Vec<Arc<dyn PhysicalExpr>>,
+    pub output_partition_count: usize,
     pub metrics: ExecutionPlanMetricsSet,
 }
 
 impl ShuffleWriterExec {
-    pub fn new(stage_id: usize, plan: Arc<dyn ExecutionPlan>) -> Self {
+    pub fn new(
+        stage_id: usize,
+        plan: Arc<dyn ExecutionPlan>,
+        hash_expr: Vec<Arc<dyn PhysicalExpr>>,
+        output_partition_count: usize,
+    ) -> Self {
         Self {
             stage_id,
             plan,
+            hash_expr,
+            output_partition_count,
             metrics: ExecutionPlanMetricsSet::new(),
         }
     }
@@ -52,10 +62,11 @@ impl ExecutionPlan for ShuffleWriterExec {
     }
 
     fn output_partitioning(&self) -> Partitioning {
-        self.plan.output_partitioning()
+        Partitioning::Hash(self.hash_expr.clone(), self.output_partition_count)
     }
 
     fn output_ordering(&self) -> Option<&[PhysicalSortExpr]> {
+        // TODO in the case of a single partition of a sorted plan this could be implemented
         None
     }
 
@@ -66,7 +77,7 @@ impl ExecutionPlan for ShuffleWriterExec {
     fn with_new_children(
         self: Arc<Self>,
         _: Vec<Arc<dyn ExecutionPlan>>,
-    ) -> datafusion::common::Result<Arc<dyn ExecutionPlan>> {
+    ) -> Result<Arc<dyn ExecutionPlan>> {
         unimplemented!()
     }
 
@@ -78,8 +89,8 @@ impl ExecutionPlan for ShuffleWriterExec {
         &self,
         input_partition: usize,
         context: Arc<TaskContext>,
-    ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        println!("ShuffleWriteExec::execute(input_partition={input_partition})");
+    ) -> Result<SendableRecordBatchStream> {
+        debug!("ShuffleWriteExec::execute(input_partition={input_partition})");
 
         let mut stream = self.plan.execute(input_partition, context)?;
         let write_time =
@@ -95,10 +106,13 @@ impl ExecutionPlan for ShuffleWriterExec {
             if partition_count == 1 {
                 // stream the results from the query
                 // TODO remove hard-coded path
-                let file = format!("/tmp/raysql/stage_{}_part_0.arrow", stage_id);
-                println!("Executing query and writing results to {file}");
+                let file = format!(
+                    "/tmp/raysql/shuffle_{}_{}_0.arrow",
+                    stage_id, input_partition
+                );
+                debug!("Executing query and writing results to {file}");
                 let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
-                println!(
+                debug!(
                     "Query completed. Shuffle write time: {}. Rows: {}.",
                     write_time, stats.num_rows
                 );
@@ -118,7 +132,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                     let input_batch = result?;
                     rows += input_batch.num_rows();
 
-                    println!(
+                    debug!(
                         "ShuffleWriterExec writing batch:\n{}",
                         pretty_format_batches(&[input_batch.clone()])?
                     );
@@ -133,11 +147,11 @@ impl ExecutionPlan for ShuffleWriterExec {
                             None => {
                                 // TODO remove hard-coded path
                                 let path = format!(
-                                    "/tmp/raysql/stage_{}_part_{}.arrow",
-                                    stage_id, output_partition
+                                    "/tmp/raysql/shuffle_{}_{}_{}.arrow",
+                                    stage_id, input_partition, output_partition
                                 );
                                 let path = Path::new(&path);
-                                println!("Writing results to {:?}", path);
+                                debug!("Writing results to {:?}", path);
 
                                 let mut writer = IPCWriter::new(&path, stream.schema().as_ref())?;
 
@@ -153,7 +167,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                     match w {
                         Some(w) => {
                             w.finish()?;
-                            println!(
+                            debug!(
                                     "Finished writing shuffle partition {} at {:?}. Batches: {}. Rows: {}. Bytes: {}.",
                                     i,
                                     w.path(),
@@ -166,7 +180,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                     }
                 }
 
-                println!("finished processing stream with {rows} rows");
+                debug!("finished processing stream with {rows} rows");
             }
 
             // create a dummy batch to return - later this could be metadata about the

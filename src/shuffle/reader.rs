@@ -4,10 +4,13 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::PhysicalSortExpr;
+use datafusion::physical_plan::union::CombinedRecordBatchStream;
 use datafusion::physical_plan::{
     DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream, SendableRecordBatchStream,
 };
 use futures::Stream;
+use glob::glob;
+use log::debug;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::fs::File;
@@ -21,11 +24,17 @@ pub struct ShuffleReaderExec {
     pub stage_id: usize,
     /// The output schema of the query stage being read from
     schema: SchemaRef,
+    /// Output partitioning
+    partitioning: Partitioning,
 }
 
 impl ShuffleReaderExec {
-    pub fn new(stage_id: usize, schema: SchemaRef) -> Self {
-        Self { stage_id, schema }
+    pub fn new(stage_id: usize, schema: SchemaRef, partitioning: Partitioning) -> Self {
+        Self {
+            stage_id,
+            schema,
+            partitioning,
+        }
     }
 }
 
@@ -39,10 +48,11 @@ impl ExecutionPlan for ShuffleReaderExec {
     }
 
     fn output_partitioning(&self) -> Partitioning {
-        Partitioning::UnknownPartitioning(1)
+        self.partitioning.clone()
     }
 
     fn output_ordering(&self) -> Option<&[PhysicalSortExpr]> {
+        // TODO could be implemented in some cases
         None
     }
 
@@ -63,10 +73,18 @@ impl ExecutionPlan for ShuffleReaderExec {
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
         // TODO remove hard-coded path
-        let file = format!("/tmp/raysql/stage_{}_part_{partition}.arrow", self.stage_id);
-        println!("Shuffle reader reading from {file}");
-        let reader = FileReader::try_new(File::open(&file)?, None)?;
-        Ok(Box::pin(LocalShuffleStream::new(reader)))
+        let pattern = format!("/tmp/raysql/shuffle_{}_*_{partition}.arrow", self.stage_id);
+        let mut streams: Vec<SendableRecordBatchStream> = vec![];
+        for entry in glob(&pattern).expect("Failed to read glob pattern") {
+            let file = entry.unwrap();
+            debug!("Shuffle reader reading from {}", file.display());
+            let reader = FileReader::try_new(File::open(&file)?, None)?;
+            streams.push(Box::pin(LocalShuffleStream::new(reader)));
+        }
+        Ok(Box::pin(CombinedRecordBatchStream::new(
+            self.schema.clone(),
+            streams,
+        )))
     }
 
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {

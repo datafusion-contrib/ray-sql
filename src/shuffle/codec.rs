@@ -1,17 +1,17 @@
-// use datafusion_proto::physical_plan::from_proto::*;
-// use datafusion_proto::physical_plan::to_proto::*;
 use crate::protobuf::ray_sql_exec_node::PlanType;
 use crate::protobuf::{RaySqlExecNode, ShuffleReaderExecNode, ShuffleWriterExecNode};
 use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
-use datafusion::common::DataFusionError;
+use datafusion::arrow::datatypes::SchemaRef;
+use datafusion::common::{DataFusionError, Result};
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::execution::FunctionRegistry;
 use datafusion::logical_expr::{AggregateUDF, ScalarUDF};
-use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::{ExecutionPlan, Partitioning};
+use datafusion_proto::physical_plan::from_proto::parse_protobuf_hash_partitioning;
 use datafusion_proto::physical_plan::AsExecutionPlan;
 use datafusion_proto::physical_plan::PhysicalExtensionCodec;
 use datafusion_proto::protobuf;
-use datafusion_proto::protobuf::PhysicalPlanNode;
+use datafusion_proto::protobuf::{PhysicalHashRepartition, PhysicalPlanNode};
 use prost::Message;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -24,7 +24,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
         &self,
         buf: &[u8],
         _inputs: &[Arc<dyn ExecutionPlan>],
-        _registry: &dyn FunctionRegistry,
+        registry: &dyn FunctionRegistry,
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         // decode bytes to protobuf struct
         let node = RaySqlExecNode::decode(buf)
@@ -32,22 +32,38 @@ impl PhysicalExtensionCodec for ShuffleCodec {
         match node.plan_type {
             Some(PlanType::ShuffleReader(reader)) => {
                 let schema = reader.schema.as_ref().unwrap();
+                let schema: SchemaRef = Arc::new(schema.try_into().unwrap());
+                let hash_part = parse_protobuf_hash_partitioning(
+                    reader.partitioning.as_ref(),
+                    registry,
+                    &schema,
+                )?;
                 Ok(Arc::new(ShuffleReaderExec::new(
-                    0, //TODO
-                    Arc::new(schema.try_into().unwrap()),
+                    reader.stage_id as usize,
+                    schema,
+                    hash_part.unwrap(),
                 )))
             }
             Some(PlanType::ShuffleWriter(writer)) => {
-                let function_registry = RaySqlFunctionRegistry {};
                 let plan = writer.plan.unwrap().try_into_physical_plan(
-                    &function_registry,
+                    registry,
                     &RuntimeEnv::default(),
                     self,
                 )?;
-                Ok(Arc::new(ShuffleWriterExec::new(
-                    writer.stage_id as usize,
-                    plan,
-                )))
+                let hash_part = parse_protobuf_hash_partitioning(
+                    writer.partitioning.as_ref(),
+                    registry,
+                    plan.schema().as_ref(),
+                )?;
+                match hash_part {
+                    Some(Partitioning::Hash(expr, count)) => Ok(Arc::new(ShuffleWriterExec::new(
+                        writer.stage_id as usize,
+                        plan,
+                        expr,
+                        count as usize,
+                    ))),
+                    _ => todo!(),
+                }
             }
             _ => unreachable!(),
         }
@@ -60,21 +76,21 @@ impl PhysicalExtensionCodec for ShuffleCodec {
     ) -> Result<(), DataFusionError> {
         let plan = if let Some(reader) = node.as_any().downcast_ref::<ShuffleReaderExec>() {
             let schema: protobuf::Schema = reader.schema().try_into().unwrap();
+            let partitioning = encode_partitioning_scheme(&reader.output_partitioning())?;
             let reader = ShuffleReaderExecNode {
                 stage_id: reader.stage_id as u32,
-                partition: 0,
                 schema: Some(schema),
-                num_output_partitions: 1,
+                partitioning: Some(partitioning),
                 shuffle_dir: "/tmp/raysql".to_string(), // TODO remove hard-coded path
             };
             PlanType::ShuffleReader(reader)
         } else if let Some(writer) = node.as_any().downcast_ref::<ShuffleWriterExec>() {
             let plan = PhysicalPlanNode::try_from_physical_plan(writer.plan.clone(), self)?;
+            let partitioning = encode_partitioning_scheme(&writer.output_partitioning())?;
             let writer = ShuffleWriterExecNode {
-                stage_id: 0,
+                stage_id: writer.stage_id as u32,
                 plan: Some(plan),
-                partition_expr: vec![],
-                num_output_partitions: 1,
+                partitioning: Some(partitioning),
                 shuffle_dir: "/tmp/raysql".to_string(), // TODO remove hard-coded path
             };
             PlanType::ShuffleWriter(writer)
@@ -83,6 +99,19 @@ impl PhysicalExtensionCodec for ShuffleCodec {
         };
         plan.encode(buf);
         Ok(())
+    }
+}
+
+fn encode_partitioning_scheme(partitioning: &Partitioning) -> Result<PhysicalHashRepartition> {
+    match partitioning {
+        Partitioning::Hash(expr, partition_count) => Ok(protobuf::PhysicalHashRepartition {
+            hash_expr: expr
+                .iter()
+                .map(|expr| expr.clone().try_into())
+                .collect::<Result<Vec<_>, DataFusionError>>()?,
+            partition_count: *partition_count as u64,
+        }),
+        _ => todo!("unsupported shuffle partitioning scheme"),
     }
 }
 
