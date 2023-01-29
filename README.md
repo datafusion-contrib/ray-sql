@@ -26,7 +26,7 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 ## Status
 
-- Proof-of-concept. Not producing correct results yet.
+- Seems to be working, but only tested with a few queries so far!
 
 ## Features
 
