@@ -39,12 +39,12 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 ## Performance
 
-This chart shows the relative performance of RaySQL with other open-source distributed SQL frameworks.
+This chart shows the relative performance of RaySQL compared to other open-source distributed SQL frameworks.
 
 Only a few queries work, and performance does not look very promising so far, but this may just be because of the naïve 
 distributed planner introducing unnecessary shuffles. 
 
-~[SQLBench-H Performance Chart](https://sqlbenchmarks.io/sqlbench-h/results/env/workstation/sf10/distributed/sqlbench-h-workstation-10-distributed-perquery.png)
+![SQLBench-H Performance Chart](https://sqlbenchmarks.io/sqlbench-h/results/env/workstation/sf10/distributed/sqlbench-h-workstation-10-distributed-perquery.png)
 
 ## Building
 
