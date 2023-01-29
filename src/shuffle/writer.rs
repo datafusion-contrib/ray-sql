@@ -32,15 +32,24 @@ pub struct ShuffleWriterExec {
     pub(crate) plan: Arc<dyn ExecutionPlan>,
     /// Output partitioning
     partitioning: Partitioning,
+    /// Directory to write shuffle files from
+    pub shuffle_dir: String,
+    /// Metrics
     pub metrics: ExecutionPlanMetricsSet,
 }
 
 impl ShuffleWriterExec {
-    pub fn new(stage_id: usize, plan: Arc<dyn ExecutionPlan>, partitioning: Partitioning) -> Self {
+    pub fn new(
+        stage_id: usize,
+        plan: Arc<dyn ExecutionPlan>,
+        partitioning: Partitioning,
+        shuffle_dir: &str,
+    ) -> Self {
         Self {
             stage_id,
             plan,
             partitioning,
+            shuffle_dir: shuffle_dir.to_string(),
             metrics: ExecutionPlanMetricsSet::new(),
         }
     }
@@ -99,12 +108,15 @@ impl ExecutionPlan for ShuffleWriterExec {
         let stage_id = self.stage_id;
         let partitioning = self.output_partitioning();
         let partition_count = partitioning.partition_count();
+        let shuffle_dir = self.shuffle_dir.clone();
 
         let results = async move {
             if partition_count == 1 {
                 // stream the results from the query
-                // TODO remove hard-coded path
-                let file = format!("/tmp/raysql/shuffle_{stage_id}_{input_partition}_0.arrow");
+                let file = format!(
+                    "/{}/shuffle_{stage_id}_{input_partition}_0.arrow",
+                    shuffle_dir
+                );
                 debug!("Executing query and writing results to {file}");
                 let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
                 debug!(
@@ -140,9 +152,9 @@ impl ExecutionPlan for ShuffleWriterExec {
                                 w.write(&output_batch)?;
                             }
                             None => {
-                                // TODO remove hard-coded path
                                 let path = format!(
-                                    "/tmp/raysql/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow"
+                                    "/{}/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow",
+                                    shuffle_dir
                                 );
                                 let path = Path::new(&path);
                                 debug!("Writing results to {:?}", path);

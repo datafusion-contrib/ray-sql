@@ -42,6 +42,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                     reader.stage_id as usize,
                     schema,
                     hash_part.unwrap(),
+                    &reader.shuffle_dir,
                 )))
             }
             Some(PlanType::ShuffleWriter(writer)) => {
@@ -59,6 +60,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                     writer.stage_id as usize,
                     plan,
                     hash_part.unwrap(),
+                    &writer.shuffle_dir,
                 )))
             }
             _ => unreachable!(),
@@ -77,7 +79,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                 stage_id: reader.stage_id as u32,
                 schema: Some(schema),
                 partitioning: Some(partitioning),
-                shuffle_dir: "/tmp/raysql".to_string(), // TODO remove hard-coded path
+                shuffle_dir: reader.shuffle_dir.clone(),
             };
             PlanType::ShuffleReader(reader)
         } else if let Some(writer) = node.as_any().downcast_ref::<ShuffleWriterExec>() {
@@ -87,7 +89,7 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                 stage_id: writer.stage_id as u32,
                 plan: Some(plan),
                 partitioning: Some(partitioning),
-                shuffle_dir: "/tmp/raysql".to_string(), // TODO remove hard-coded path
+                shuffle_dir: writer.shuffle_dir.clone(),
             };
             PlanType::ShuffleWriter(writer)
         } else {

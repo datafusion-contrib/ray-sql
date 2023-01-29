@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use tempfile::tempdir;
 
 #[pyclass(name = "ExecutionGraph", module = "raysql", subclass)]
 pub struct PyExecutionGraph {
@@ -195,11 +196,16 @@ fn generate_query_stages(
             partitioning_scheme => {
                 // create a shuffle query stage for this repartition
                 let stage_id = graph.next_id();
+
+                // create temp dir for stage shuffle files
+                let temp_dir = create_temp_dir(stage_id)?;
+
                 let shuffle_writer_input = plan.children()[0].clone();
                 let shuffle_writer = ShuffleWriterExec::new(
                     stage_id,
                     shuffle_writer_input,
                     partitioning_scheme.clone(),
+                    &temp_dir,
                 );
                 let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
                 // replace the plan with a shuffle reader
@@ -207,6 +213,7 @@ fn generate_query_stages(
                     stage_id,
                     plan.schema(),
                     partitioning_scheme.clone(),
+                    &temp_dir,
                 )))
             }
         }
@@ -217,11 +224,16 @@ fn generate_query_stages(
     {
         // introduce shuffle to produce one output partition
         let stage_id = graph.next_id();
+
+        // create temp dir for stage shuffle files
+        let temp_dir = create_temp_dir(stage_id)?;
+
         let shuffle_writer_input = plan.children()[0].clone();
         let shuffle_writer = ShuffleWriterExec::new(
             stage_id,
             shuffle_writer_input,
             Partitioning::UnknownPartitioning(1),
+            &temp_dir,
         );
         let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
         // replace the plan with a shuffle reader
@@ -229,8 +241,17 @@ fn generate_query_stages(
             stage_id,
             plan.schema(),
             Partitioning::UnknownPartitioning(1),
+            &temp_dir,
         )))
     } else {
         Ok(plan)
     }
+}
+
+fn create_temp_dir(stage_id: usize) -> Result<String> {
+    let dir = tempdir()?;
+    let temp_dir = dir.path().join(format!("stage-{}", stage_id));
+    let temp_dir = format!("{}", temp_dir.display());
+    println!("Creating temp shuffle dir: {}", temp_dir);
+    Ok(temp_dir)
 }
