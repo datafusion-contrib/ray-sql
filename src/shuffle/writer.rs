@@ -151,7 +151,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                                 let path = Path::new(&path);
                                 debug!("Writing results to {:?}", path);
 
-                                let mut writer = IPCWriter::new(&path, stream.schema().as_ref())?;
+                                let mut writer = IPCWriter::new(path, stream.schema().as_ref())?;
 
                                 writer.write(&output_batch)?;
                                 writers[output_partition] = Some(writer);
