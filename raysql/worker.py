@@ -10,7 +10,7 @@ class Worker:
         plan = self.ctx.deserialize_execution_plan(plan_bytes)
 
         # debug logging
-        # print("Executing partition #{}:\n{}".format(part, plan.display_indent()))
+        print("Executing partition #{}:\n{}".format(part, plan.display_indent()))
 
         # This is delegating to DataFusion for execution, but this would be a good place
         # to plug in other execution engines by translating the plan into another engine's plan
