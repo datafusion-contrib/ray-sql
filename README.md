@@ -26,7 +26,7 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 ## Status
 
-- Seems to be working, but only tested with a few queries so far!
+- Partially working. Can run a few TPC-H queries.
 
 ## Features
 
@@ -35,8 +35,16 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 ## Limitations
 
-- Simplistic shuffle mechanism that produces lots of files
 - Requires a shared file system currently
+
+## Performance
+
+This chart shows the relative performance of RaySQL with other open-source distributed SQL frameworks.
+
+Only a few queries work, and performance does not look very promising so far, but this may just be because of the naïve 
+distributed planner introducing unnecessary shuffles. 
+
+~[SQLBench-H Performance Chart](https://sqlbenchmarks.io/sqlbench-h/results/env/workstation/sf10/distributed/sqlbench-h-workstation-10-distributed-perquery.png)
 
 ## Building
 
@@ -57,6 +65,15 @@ Whenever rust code changes (your changes or via `git pull`):
 # make sure you activate the venv using "source venv/bin/activate" first
 maturin develop
 python -m pytest
+```
+
+## Benchmarking
+
+Create a release build when running benchmarks, then use pip to install the wheel.
+
+```bash
+maturin build --release
+pip install ./target/wheels/raysql-0.1.0-cp37-abi3-manylinux_2_31_x86_64.whl --force-reinstall
 ```
 
 ## How to update dependencies

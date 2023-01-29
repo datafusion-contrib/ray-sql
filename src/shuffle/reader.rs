@@ -64,7 +64,7 @@ impl ExecutionPlan for ShuffleReaderExec {
         self: Arc<Self>,
         _: Vec<Arc<dyn ExecutionPlan>>,
     ) -> datafusion::common::Result<Arc<dyn ExecutionPlan>> {
-        Ok(self.clone())
+        Ok(self)
     }
 
     fn execute(
