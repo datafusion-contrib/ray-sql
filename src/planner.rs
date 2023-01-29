@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tempfile::tempdir;
+use uuid::Uuid;
 
 #[pyclass(name = "ExecutionGraph", module = "raysql", subclass)]
 pub struct PyExecutionGraph {
@@ -249,9 +249,10 @@ fn generate_query_stages(
 }
 
 fn create_temp_dir(stage_id: usize) -> Result<String> {
-    let dir = tempdir()?;
-    let temp_dir = dir.path().join(format!("stage-{}", stage_id));
-    let temp_dir = format!("{}", temp_dir.display());
+    // TODO find a crate for temp dir that does not delete the temp dir on process exit
+    let uuid = Uuid::new_v4();
+    let temp_dir = format!("/tmp/ray-sql-{uuid}-stage-{stage_id}");
     println!("Creating temp shuffle dir: {}", temp_dir);
+    std::fs::create_dir(&temp_dir)?;
     Ok(temp_dir)
 }

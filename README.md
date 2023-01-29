@@ -72,6 +72,8 @@ python -m pytest
 Create a release build when running benchmarks, then use pip to install the wheel.
 
 ```bash
+cargo clean
+maturin develop
 maturin build --release
 pip install ./target/wheels/raysql-0.1.0-cp37-abi3-manylinux_2_31_x86_64.whl --force-reinstall
 ```
