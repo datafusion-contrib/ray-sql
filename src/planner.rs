@@ -51,6 +51,12 @@ pub struct ExecutionGraph {
     id_generator: AtomicUsize,
 }
 
+impl Default for ExecutionGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutionGraph {
     pub fn new() -> Self {
         Self {
@@ -69,7 +75,7 @@ impl ExecutionGraph {
         // the final query stage is always the last to be created and
         // therefore has the highest id
         let mut max_id = 0;
-        for (k, _) in &self.query_stages {
+        for k in self.query_stages.keys() {
             if *k > max_id {
                 max_id = *k;
             }

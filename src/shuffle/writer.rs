@@ -104,10 +104,7 @@ impl ExecutionPlan for ShuffleWriterExec {
             if partition_count == 1 {
                 // stream the results from the query
                 // TODO remove hard-coded path
-                let file = format!(
-                    "/tmp/raysql/shuffle_{}_{}_0.arrow",
-                    stage_id, input_partition
-                );
+                let file = format!("/tmp/raysql/shuffle_{stage_id}_{input_partition}_0.arrow");
                 debug!("Executing query and writing results to {file}");
                 let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
                 debug!(
@@ -145,8 +142,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                             None => {
                                 // TODO remove hard-coded path
                                 let path = format!(
-                                    "/tmp/raysql/shuffle_{}_{}_{}.arrow",
-                                    stage_id, input_partition, output_partition
+                                    "/tmp/raysql/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow"
                                 );
                                 let path = Path::new(&path);
                                 debug!("Writing results to {:?}", path);
@@ -197,7 +193,7 @@ impl ExecutionPlan for ShuffleWriterExec {
             // return as a stream
             MemoryStream::try_new(vec![batch], schema, None)
         };
-        let schema = self.schema().clone();
+        let schema = self.schema();
         Ok(Box::pin(RecordBatchStreamAdapter::new(
             schema,
             futures::stream::once(results).try_flatten(),

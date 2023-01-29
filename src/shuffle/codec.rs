@@ -112,8 +112,7 @@ fn encode_partitioning_scheme(partitioning: &Partitioning) -> Result<PhysicalHas
             partition_count: 1,
         }),
         other => Err(DataFusionError::Plan(format!(
-            "Unsupported shuffle partitioning scheme: {:?}",
-            other
+            "Unsupported shuffle partitioning scheme: {other:?}"
         ))),
     }
 }
@@ -126,10 +125,10 @@ impl FunctionRegistry for RaySqlFunctionRegistry {
     }
 
     fn udf(&self, name: &str) -> datafusion::common::Result<Arc<ScalarUDF>> {
-        Err(DataFusionError::Plan(format!("Invalid UDF: {}", name)))
+        Err(DataFusionError::Plan(format!("Invalid UDF: {name}")))
     }
 
     fn udaf(&self, name: &str) -> datafusion::common::Result<Arc<AggregateUDF>> {
-        Err(DataFusionError::Plan(format!("Invalid UDAF: {}", name)))
+        Err(DataFusionError::Plan(format!("Invalid UDAF: {name}")))
     }
 }
