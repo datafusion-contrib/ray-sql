@@ -2087,9 +2087,9 @@ dependencies = [
  "prost-types 0.11.6",
  "pyo3",
  "rustc_version",
- "tempfile",
  "tokio",
  "tonic-build",
+ "uuid",
 ]
 
 [[package]]
