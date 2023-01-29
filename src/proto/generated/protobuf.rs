@@ -24,9 +24,11 @@ pub struct ShuffleReaderExecNode {
     /// schema of the shuffle stage
     #[prost(message, optional, tag = "2")]
     pub schema: ::core::option::Option<::datafusion_proto::protobuf::Schema>,
-    /// this must match the output partitions of the writer we are reading from
-    #[prost(uint32, tag = "3")]
-    pub num_output_partitions: u32,
+    /// this must match the output partitioning of the writer we are reading from
+    #[prost(message, optional, tag = "3")]
+    pub partitioning: ::core::option::Option<
+        ::datafusion_proto::protobuf::PhysicalHashRepartition,
+    >,
     /// directory for shuffle files
     #[prost(string, tag = "4")]
     pub shuffle_dir: ::prost::alloc::string::String,

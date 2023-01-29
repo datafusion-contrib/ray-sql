@@ -201,9 +201,16 @@ fn generate_query_stages(
                 );
                 let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
                 // replace the plan with a shuffle reader
-                Ok(Arc::new(ShuffleReaderExec::new(stage_id, plan.schema())))
+                Ok(Arc::new(ShuffleReaderExec::new(
+                    stage_id,
+                    plan.schema(),
+                    repart.partitioning().clone(),
+                )))
             }
-            &Partitioning::UnknownPartitioning(_) => todo!(),
+            &Partitioning::UnknownPartitioning(_) => {
+                // remove UnknownPartitioning repartitions
+                Ok(plan.children()[0].clone())
+            }
         }
     } else {
         Ok(plan)

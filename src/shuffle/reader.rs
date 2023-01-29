@@ -24,11 +24,17 @@ pub struct ShuffleReaderExec {
     pub stage_id: usize,
     /// The output schema of the query stage being read from
     schema: SchemaRef,
+    /// Output partitioning
+    partitioning: Partitioning,
 }
 
 impl ShuffleReaderExec {
-    pub fn new(stage_id: usize, schema: SchemaRef) -> Self {
-        Self { stage_id, schema }
+    pub fn new(stage_id: usize, schema: SchemaRef, partitioning: Partitioning) -> Self {
+        Self {
+            stage_id,
+            schema,
+            partitioning,
+        }
     }
 }
 
@@ -42,10 +48,11 @@ impl ExecutionPlan for ShuffleReaderExec {
     }
 
     fn output_partitioning(&self) -> Partitioning {
-        Partitioning::UnknownPartitioning(1)
+        self.partitioning.clone()
     }
 
     fn output_ordering(&self) -> Option<&[PhysicalSortExpr]> {
+        // TODO could be implemented in some cases
         None
     }
 
@@ -65,7 +72,7 @@ impl ExecutionPlan for ShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        // TODO remove hard-coded path  
+        // TODO remove hard-coded path
         let pattern = format!("/tmp/raysql/shuffle_{}_*_{partition}.arrow", self.stage_id);
         let mut streams: Vec<SendableRecordBatchStream> = vec![];
         for entry in glob(&pattern).expect("Failed to read glob pattern") {

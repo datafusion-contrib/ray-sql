@@ -20,8 +20,8 @@ message ShuffleReaderExecNode {
   uint32 stage_id = 1;
   // schema of the shuffle stage
   datafusion.Schema schema = 2;
-  // this must match the output partitions of the writer we are reading from
-  uint32 num_output_partitions = 3;
+  // this must match the output partitioning of the writer we are reading from
+  datafusion.PhysicalHashRepartition partitioning = 3;
   // directory for shuffle files
   string shuffle_dir = 4;
 }
