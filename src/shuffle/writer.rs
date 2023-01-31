@@ -113,10 +113,7 @@ impl ExecutionPlan for ShuffleWriterExec {
         let results = async move {
             if partition_count == 1 {
                 // stream the results from the query
-                let file = format!(
-                    "/{}/shuffle_{stage_id}_{input_partition}_0.arrow",
-                    shuffle_dir
-                );
+                let file = format!("/{shuffle_dir}/shuffle_{stage_id}_{input_partition}_0.arrow",);
                 debug!("Executing query and writing results to {file}");
                 let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
                 debug!(
@@ -153,8 +150,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                             }
                             None => {
                                 let path = format!(
-                                    "/{}/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow",
-                                    shuffle_dir
+                                    "/{shuffle_dir}/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow",
                                 );
                                 let path = Path::new(&path);
                                 debug!("Writing results to {:?}", path);

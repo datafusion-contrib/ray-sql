@@ -242,10 +242,9 @@ fn create_shuffle_exchange(
 }
 
 fn create_temp_dir(stage_id: usize) -> Result<String> {
-    // TODO find a crate for temp dir that does not delete the temp dir on process exit
     let uuid = Uuid::new_v4();
     let temp_dir = format!("/tmp/ray-sql-{uuid}-stage-{stage_id}");
-    println!("Creating temp shuffle dir: {}", temp_dir);
+    println!("Creating temp shuffle dir: {temp_dir}");
     std::fs::create_dir(&temp_dir)?;
     Ok(temp_dir)
 }
@@ -372,7 +371,7 @@ mod test {
     async fn do_test(n: u8) -> Result<()> {
         let data_path = "/mnt/bigdata/tpch/sf10-parquet";
         if !Path::new(&data_path).exists() {
-            return Ok(())
+            return Ok(());
         }
         let file = format!("testdata/queries/q{n}.sql");
         let sql = fs::read_to_string(&file)?;
@@ -394,10 +393,16 @@ mod test {
         let df = ctx.sql(&sql).await?;
 
         let plan = df.clone().into_optimized_plan()?;
-        output.push_str(&format!("DataFusion Logical Plan\n=======================\n\n{}\n\n", plan.display_indent()));
+        output.push_str(&format!(
+            "DataFusion Logical Plan\n=======================\n\n{}\n\n",
+            plan.display_indent()
+        ));
 
         let plan = df.create_physical_plan().await?;
-        output.push_str(&format!("DataFusion Physical Plan\n========================\n\n{}\n", displayable(plan.as_ref()).indent()));
+        output.push_str(&format!(
+            "DataFusion Physical Plan\n========================\n\n{}\n",
+            displayable(plan.as_ref()).indent()
+        ));
 
         output.push_str("RaySQL Plan\n===========\n\n");
         let graph = make_execution_graph(plan)?;
