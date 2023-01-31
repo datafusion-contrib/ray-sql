@@ -1,5 +1,6 @@
 import ray
 from raysql import Context
+import time
 
 class RaySqlContext:
 
@@ -18,7 +19,7 @@ class RaySqlContext:
         # recurse down the tree and build a DAG of futures
         final_stage = graph.get_final_query_stage()
         # schedule execution
-        self.execute_query_stage(graph, final_stage)
+        return self.execute_query_stage(graph, final_stage)
 
     def execute_query_stage(self, graph, stage):
 
@@ -44,9 +45,12 @@ class RaySqlContext:
         futures = []
         for part in range(partition_count):
             worker_index = part % len(self.workers)
-            print("Asking worker {} to execute partition {}".format(worker_index, part))
             futures.append(self.workers[worker_index].execute_query_partition.remote(plan_bytes, part))
 
         print("Waiting for query stage #{} to complete".format(stage.id()))
-        print(ray.get(futures))
-        print("Query stage #{} has completed".format(stage.id()))
+        start = time.time()
+        result_set = ray.get(futures)
+        end = time.time()
+        print("Query stage #{} completed in {} seconds".format(stage.id(), end-start))
+
+        return result_set

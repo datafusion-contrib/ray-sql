@@ -4,7 +4,7 @@ description = "RaySQL: DataFusion on Ray"
 homepage = "https://github.com/andygrove/ray-sql"
 repository = "https://github.com/andygrove/ray-sql"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 readme = "README.md"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ build = "build.rs"
 [dependencies]
 datafusion = { version = "17.0.0", features = ["pyarrow", "avro"] }
 datafusion-proto = "17.0.0"
-datafusion-python = { git = "https://github.com/andygrove/arrow-datafusion-python", rev = "7164900a32b25f0644a3294389f02e28e94da8a3" }
+datafusion-python = { git = "https://github.com/apache/arrow-datafusion-python", rev = "8975d4ec981aeae948250f0cb4d08c131f4f2a28" }
 futures = "0.3"
 glob = "0.3"
 log = "0.4"
