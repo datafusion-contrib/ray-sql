@@ -2,14 +2,15 @@ use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
 use datafusion::error::Result;
 use datafusion::physical_plan::coalesce_partitions::CoalescePartitionsExec;
 use datafusion::physical_plan::repartition::RepartitionExec;
+use datafusion::physical_plan::sorts::sort_preserving_merge::SortPreservingMergeExec;
 use datafusion::physical_plan::Partitioning;
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use datafusion_python::physical_plan::PyExecutionPlan;
+use log::debug;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use datafusion::physical_plan::sorts::sort_preserving_merge::SortPreservingMergeExec;
 use uuid::Uuid;
 
 #[pyclass(name = "ExecutionGraph", module = "raysql", subclass)]
@@ -251,7 +252,7 @@ fn create_shuffle_exchange(
 fn create_temp_dir(stage_id: usize) -> Result<String> {
     let uuid = Uuid::new_v4();
     let temp_dir = format!("/tmp/ray-sql-{uuid}-stage-{stage_id}");
-    println!("Creating temp shuffle dir: {temp_dir}");
+    debug!("Creating temp shuffle dir: {temp_dir}");
     std::fs::create_dir(&temp_dir)?;
     Ok(temp_dir)
 }

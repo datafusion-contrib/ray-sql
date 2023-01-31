@@ -822,7 +822,7 @@ dependencies = [
 [[package]]
 name = "datafusion-python"
 version = "0.8.0"
-source = "git+https://github.com/andygrove/arrow-datafusion-python?rev=7164900a32b25f0644a3294389f02e28e94da8a3#7164900a32b25f0644a3294389f02e28e94da8a3"
+source = "git+https://github.com/apache/arrow-datafusion-python?rev=8975d4ec981aeae948250f0cb4d08c131f4f2a28#8975d4ec981aeae948250f0cb4d08c131f4f2a28"
 dependencies = [
  "async-trait",
  "datafusion",
@@ -2085,7 +2085,7 @@ dependencies = [
 
 [[package]]
 name = "raysql"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "datafusion",
  "datafusion-proto",

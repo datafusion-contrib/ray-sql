@@ -21,7 +21,8 @@ workers = [Worker.remote() for i in range(2)]
 # create context and plan a query
 ctx = RaySqlContext(workers)
 ctx.register_csv('tips', 'tips.csv', True)
-ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+result_set = ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+print(result_set)
 ```
 
 ## Status

@@ -15,6 +15,5 @@ ctx.register_csv('tips', 'tips.csv', True)
 # Parquet is also supported
 # ctx.register_parquet('tips', 'tips.parquet')
 
-ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
-
-# ctx.sql('select day, sum(total_bill) from tips group by day')
+result_set = ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+print(result_set)
