@@ -12,9 +12,9 @@ rust-version = "1.62"
 build = "build.rs"
 
 [dependencies]
-datafusion = { git = "https://github.com/apache/arrow-datafusion", rev = "5238e8c97f998b4d2cb9fab85fb182f325a1a7fb", features = ["pyarrow", "avro"] }
-datafusion-proto = { git = "https://github.com/apache/arrow-datafusion", rev = "5238e8c97f998b4d2cb9fab85fb182f325a1a7fb" }
-datafusion-python = { git = "https://github.com/apache/arrow-datafusion-python", rev = "0a6743c2a7f27015890c5546efda2d4e85d45a97" }
+datafusion = { version = "17.0.0", features = ["pyarrow", "avro"] }
+datafusion-proto = "17.0.0"
+datafusion-python = { git = "https://github.com/andygrove/arrow-datafusion-python", rev = "7164900a32b25f0644a3294389f02e28e94da8a3" }
 futures = "0.3"
 glob = "0.3"
 log = "0.4"

@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use datafusion::physical_plan::sorts::sort_preserving_merge::SortPreservingMergeExec;
 use uuid::Uuid;
 
 #[pyclass(name = "ExecutionGraph", module = "raysql", subclass)]
@@ -174,7 +175,8 @@ pub fn make_execution_graph(plan: Arc<dyn ExecutionPlan>) -> Result<ExecutionGra
     Ok(graph)
 }
 
-/// Replace RepartitionExec and CoalescePartitionExec with ShuffleWriterExec/ShuffleReaderExec
+/// Convert a physical query plan into a distributed physical query plan by breaking the query
+/// into query stages based on changes in partitioning.
 fn generate_query_stages(
     plan: Arc<dyn ExecutionPlan>,
     graph: &mut ExecutionGraph,
@@ -189,32 +191,12 @@ fn generate_query_stages(
 
     if let Some(repart) = plan.as_any().downcast_ref::<RepartitionExec>() {
         match repart.partitioning() {
-            &Partitioning::UnknownPartitioning(_) => {
-                // just remove this
+            &Partitioning::UnknownPartitioning(_) | &Partitioning::RoundRobinBatch(_) => {
+                // just remove these
                 Ok(repart.children()[0].clone())
             }
             partitioning_scheme => {
-                // create a shuffle query stage for this repartition
-                let stage_id = graph.next_id();
-
-                // create temp dir for stage shuffle files
-                let temp_dir = create_temp_dir(stage_id)?;
-
-                let shuffle_writer_input = plan.children()[0].clone();
-                let shuffle_writer = ShuffleWriterExec::new(
-                    stage_id,
-                    shuffle_writer_input,
-                    partitioning_scheme.clone(),
-                    &temp_dir,
-                );
-                let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
-                // replace the plan with a shuffle reader
-                Ok(Arc::new(ShuffleReaderExec::new(
-                    stage_id,
-                    plan.schema(),
-                    partitioning_scheme.clone(),
-                    &temp_dir,
-                )))
+                create_shuffle_exchange(plan.as_ref(), graph, partitioning_scheme.clone())
             }
         }
     } else if plan
@@ -222,37 +204,228 @@ fn generate_query_stages(
         .downcast_ref::<CoalescePartitionsExec>()
         .is_some()
     {
-        // introduce shuffle to produce one output partition
-        let stage_id = graph.next_id();
-
-        // create temp dir for stage shuffle files
-        let temp_dir = create_temp_dir(stage_id)?;
-
-        let shuffle_writer_input = plan.children()[0].clone();
-        let shuffle_writer = ShuffleWriterExec::new(
-            stage_id,
-            shuffle_writer_input,
-            Partitioning::UnknownPartitioning(1),
-            &temp_dir,
-        );
-        let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
-        // replace the plan with a shuffle reader
-        Ok(Arc::new(ShuffleReaderExec::new(
-            stage_id,
-            plan.schema(),
-            Partitioning::UnknownPartitioning(1),
-            &temp_dir,
-        )))
+        create_shuffle_exchange(plan.as_ref(), graph, Partitioning::UnknownPartitioning(1))
+    } else if plan
+        .as_any()
+        .downcast_ref::<SortPreservingMergeExec>()
+        .is_some()
+    {
+        create_shuffle_exchange(plan.as_ref(), graph, Partitioning::UnknownPartitioning(1))
     } else {
         Ok(plan)
     }
 }
 
+/// Create a shuffle exchange.
+///
+/// The plan is wrapped in a ShuffleWriteExec and added as a new query plan in the execution graph
+/// and a ShuffleReaderExec is returned to replace the plan.
+fn create_shuffle_exchange(
+    plan: &dyn ExecutionPlan,
+    graph: &mut ExecutionGraph,
+    partitioning_scheme: Partitioning,
+) -> Result<Arc<dyn ExecutionPlan>> {
+    // introduce shuffle to produce one output partition
+    let stage_id = graph.next_id();
+
+    // create temp dir for stage shuffle files
+    let temp_dir = create_temp_dir(stage_id)?;
+
+    let shuffle_writer_input = plan.children()[0].clone();
+    let shuffle_writer = ShuffleWriterExec::new(
+        stage_id,
+        shuffle_writer_input,
+        partitioning_scheme.clone(),
+        &temp_dir,
+    );
+    let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
+    // replace the plan with a shuffle reader
+    Ok(Arc::new(ShuffleReaderExec::new(
+        stage_id,
+        plan.schema(),
+        partitioning_scheme,
+        &temp_dir,
+    )))
+}
+
 fn create_temp_dir(stage_id: usize) -> Result<String> {
-    // TODO find a crate for temp dir that does not delete the temp dir on process exit
     let uuid = Uuid::new_v4();
     let temp_dir = format!("/tmp/ray-sql-{uuid}-stage-{stage_id}");
-    println!("Creating temp shuffle dir: {}", temp_dir);
+    println!("Creating temp shuffle dir: {temp_dir}");
     std::fs::create_dir(&temp_dir)?;
     Ok(temp_dir)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use datafusion::physical_plan::displayable;
+    use datafusion::prelude::{ParquetReadOptions, SessionConfig, SessionContext};
+    use std::fs;
+    use std::path::Path;
+
+    #[tokio::test]
+    async fn test_q1() -> Result<()> {
+        do_test(1).await
+    }
+
+    #[tokio::test]
+    async fn test_q2() -> Result<()> {
+        do_test(2).await
+    }
+
+    #[tokio::test]
+    async fn test_q3() -> Result<()> {
+        do_test(3).await
+    }
+
+    #[tokio::test]
+    async fn test_q4() -> Result<()> {
+        do_test(4).await
+    }
+
+    #[tokio::test]
+    async fn test_q5() -> Result<()> {
+        do_test(5).await
+    }
+
+    #[tokio::test]
+    async fn test_q6() -> Result<()> {
+        do_test(6).await
+    }
+
+    #[tokio::test]
+    async fn test_q7() -> Result<()> {
+        do_test(7).await
+    }
+
+    #[tokio::test]
+    async fn test_q8() -> Result<()> {
+        do_test(8).await
+    }
+
+    #[tokio::test]
+    async fn test_q9() -> Result<()> {
+        do_test(9).await
+    }
+
+    #[tokio::test]
+    async fn test_q10() -> Result<()> {
+        do_test(10).await
+    }
+
+    #[tokio::test]
+    async fn test_q11() -> Result<()> {
+        do_test(11).await
+    }
+
+    #[tokio::test]
+    async fn test_q12() -> Result<()> {
+        do_test(12).await
+    }
+
+    #[tokio::test]
+    async fn test_q13() -> Result<()> {
+        do_test(13).await
+    }
+
+    #[tokio::test]
+    async fn test_q14() -> Result<()> {
+        do_test(14).await
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_q15() -> Result<()> {
+        do_test(15).await
+    }
+
+    #[tokio::test]
+    async fn test_q16() -> Result<()> {
+        do_test(16).await
+    }
+
+    #[tokio::test]
+    async fn test_q17() -> Result<()> {
+        do_test(17).await
+    }
+
+    #[tokio::test]
+    async fn test_q18() -> Result<()> {
+        do_test(18).await
+    }
+
+    #[tokio::test]
+    async fn test_q19() -> Result<()> {
+        do_test(19).await
+    }
+
+    #[tokio::test]
+    async fn test_q20() -> Result<()> {
+        do_test(20).await
+    }
+
+    #[tokio::test]
+    async fn test_q21() -> Result<()> {
+        do_test(21).await
+    }
+
+    #[tokio::test]
+    async fn test_q22() -> Result<()> {
+        do_test(22).await
+    }
+
+    async fn do_test(n: u8) -> Result<()> {
+        let data_path = "/mnt/bigdata/tpch/sf10-parquet";
+        if !Path::new(&data_path).exists() {
+            return Ok(());
+        }
+        let file = format!("testdata/queries/q{n}.sql");
+        let sql = fs::read_to_string(&file)?;
+        let config = SessionConfig::new().with_target_partitions(4);
+        let ctx = SessionContext::with_config(config);
+        let tables = &[
+            "customer", "lineitem", "nation", "orders", "part", "partsupp", "region", "supplier",
+        ];
+        for table in tables {
+            ctx.register_parquet(
+                table,
+                &format!("{data_path}/{table}.parquet"),
+                ParquetReadOptions::default(),
+            )
+            .await?;
+        }
+        let mut output = String::new();
+
+        let df = ctx.sql(&sql).await?;
+
+        let plan = df.clone().into_optimized_plan()?;
+        output.push_str(&format!(
+            "DataFusion Logical Plan\n=======================\n\n{}\n\n",
+            plan.display_indent()
+        ));
+
+        let plan = df.create_physical_plan().await?;
+        output.push_str(&format!(
+            "DataFusion Physical Plan\n========================\n\n{}\n",
+            displayable(plan.as_ref()).indent()
+        ));
+
+        output.push_str("RaySQL Plan\n===========\n\n");
+        let graph = make_execution_graph(plan)?;
+        for id in 0..=graph.get_final_query_stage().id {
+            let query_stage = graph.query_stages.get(&id).unwrap();
+            output.push_str(&format!(
+                "Query Stage #{id}:\n{}\n",
+                displayable(query_stage.plan.as_ref()).indent()
+            ));
+        }
+        let expected_file = format!("testdata/expected-plans/q{n}.txt");
+        if !Path::new(&expected_file).exists() {
+            fs::write(&expected_file, &output)?;
+        }
+        let expected_plan = fs::read_to_string(&expected_file)?;
+        assert_eq!(expected_plan, output);
+        Ok(())
+    }
 }
