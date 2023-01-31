@@ -229,15 +229,18 @@ ShuffleWriterExec(stage_id=16, output_partitioning=Hash([Column { name: "ps_part
         ShuffleReaderExec(stage_id=15, input_partitions=4)
 
 Query Stage #17:
+ShuffleWriterExec(stage_id=17, output_partitioning=UnknownPartitioning(1))
+  SortExec: [s_acctbal@0 DESC,n_name@2 ASC NULLS LAST,s_name@1 ASC NULLS LAST,p_partkey@3 ASC NULLS LAST]
+    ProjectionExec: expr=[s_acctbal@5 as s_acctbal, s_name@2 as s_name, n_name@7 as n_name, p_partkey@0 as p_partkey, p_mfgr@1 as p_mfgr, s_address@3 as s_address, s_phone@4 as s_phone, s_comment@6 as s_comment]
+      ProjectionExec: expr=[p_partkey@0 as p_partkey, p_mfgr@1 as p_mfgr, s_name@8 as s_name, s_address@9 as s_address, s_phone@11 as s_phone, s_acctbal@12 as s_acctbal, s_comment@13 as s_comment, n_name@15 as n_name]
+        CoalesceBatchesExec: target_batch_size=8192
+          HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "p_partkey", index: 0 }, Column { name: "ps_partkey", index: 0 }), (Column { name: "ps_supplycost", index: 6 }, Column { name: "__value", index: 1 })]
+            CoalesceBatchesExec: target_batch_size=8192
+              ShuffleReaderExec(stage_id=8, input_partitions=4)
+            CoalesceBatchesExec: target_batch_size=8192
+              ShuffleReaderExec(stage_id=16, input_partitions=4)
+
+Query Stage #18:
 GlobalLimitExec: skip=0, fetch=100
-  SortPreservingMergeExec: [s_acctbal@0 DESC,n_name@2 ASC NULLS LAST,s_name@1 ASC NULLS LAST,p_partkey@3 ASC NULLS LAST]
-    SortExec: [s_acctbal@0 DESC,n_name@2 ASC NULLS LAST,s_name@1 ASC NULLS LAST,p_partkey@3 ASC NULLS LAST]
-      ProjectionExec: expr=[s_acctbal@5 as s_acctbal, s_name@2 as s_name, n_name@7 as n_name, p_partkey@0 as p_partkey, p_mfgr@1 as p_mfgr, s_address@3 as s_address, s_phone@4 as s_phone, s_comment@6 as s_comment]
-        ProjectionExec: expr=[p_partkey@0 as p_partkey, p_mfgr@1 as p_mfgr, s_name@8 as s_name, s_address@9 as s_address, s_phone@11 as s_phone, s_acctbal@12 as s_acctbal, s_comment@13 as s_comment, n_name@15 as n_name]
-          CoalesceBatchesExec: target_batch_size=8192
-            HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "p_partkey", index: 0 }, Column { name: "ps_partkey", index: 0 }), (Column { name: "ps_supplycost", index: 6 }, Column { name: "__value", index: 1 })]
-              CoalesceBatchesExec: target_batch_size=8192
-                ShuffleReaderExec(stage_id=8, input_partitions=4)
-              CoalesceBatchesExec: target_batch_size=8192
-                ShuffleReaderExec(stage_id=16, input_partitions=4)
+  ShuffleReaderExec(stage_id=17, input_partitions=1)
 

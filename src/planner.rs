@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use datafusion::physical_plan::sorts::sort_preserving_merge::SortPreservingMergeExec;
 use uuid::Uuid;
 
 #[pyclass(name = "ExecutionGraph", module = "raysql", subclass)]
@@ -201,6 +202,12 @@ fn generate_query_stages(
     } else if plan
         .as_any()
         .downcast_ref::<CoalescePartitionsExec>()
+        .is_some()
+    {
+        create_shuffle_exchange(plan.as_ref(), graph, Partitioning::UnknownPartitioning(1))
+    } else if plan
+        .as_any()
+        .downcast_ref::<SortPreservingMergeExec>()
         .is_some()
     {
         create_shuffle_exchange(plan.as_ref(), graph, Partitioning::UnknownPartitioning(1))
@@ -414,7 +421,9 @@ mod test {
             ));
         }
         let expected_file = format!("testdata/expected-plans/q{n}.txt");
-        //fs::write(&expected_file, &output)?;
+        if !Path::new(&expected_file).exists() {
+            fs::write(&expected_file, &output)?;
+        }
         let expected_plan = fs::read_to_string(&expected_file)?;
         assert_eq!(expected_plan, output);
         Ok(())

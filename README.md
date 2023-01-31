@@ -26,7 +26,7 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 ## Status
 
-- Partially working. Can run 16 of the 22 TPC-H benchmark queries.
+- RaySQL can run 21 of the 22 TPC-H benchmark queries (query 15 needs DDL and that is not yet supported).
 
 ## Features
 
@@ -41,8 +41,7 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 This chart shows the relative performance of RaySQL compared to other open-source distributed SQL frameworks.
 
-Performance does not look very promising so far, but this project was created in one weekend, so this is probably not 
-too bad a start.
+Performance is looking pretty respectable!
 
 ![SQLBench-H Performance Chart](./docs/sqlbench-h-workstation-10-distributed-perquery.png)
 
@@ -72,10 +71,7 @@ python -m pytest
 Create a release build when running benchmarks, then use pip to install the wheel.
 
 ```bash
-cargo clean
-maturin develop
-maturin build --release
-pip install ./target/wheels/raysql-0.1.0-cp37-abi3-manylinux_2_31_x86_64.whl --force-reinstall
+maturin develop --release
 ```
 
 ## How to update dependencies
