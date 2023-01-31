@@ -26,7 +26,7 @@ ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by s
 
 ## Status
 
-- Partially working. Can run about half of the TPC-H benchmark queries.
+- Partially working. Can run 16 of the 22 TPC-H benchmark queries.
 
 ## Features
 
