@@ -29,7 +29,13 @@ pub struct PyContext {
 impl PyContext {
     #[new]
     pub fn new(target_partitions: usize) -> Self {
-        let config = SessionConfig::default().with_target_partitions(target_partitions);
+        let config = SessionConfig::default()
+            .with_target_partitions(target_partitions)
+            .with_batch_size(16*1024)
+            .with_repartition_aggregations(true)
+            .with_repartition_windows(true)
+            .with_repartition_joins(true)
+            .with_parquet_pruning(true);
         Self {
             ctx: SessionContext::with_config(config),
         }
