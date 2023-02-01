@@ -39,7 +39,7 @@ class RaySqlContext:
         print("Scheduling query stage #{} with {} input partitions and {} output partitions".format(stage.id(), partition_count, stage.get_output_partition_count()))
 
         # serialize the plan
-        plan_bytes = self.ctx.serialize_execution_plan(stage.get_execution_plan())
+        plan_bytes = ray.put(self.ctx.serialize_execution_plan(stage.get_execution_plan()))
 
         # round-robin allocation across workers
         futures = []

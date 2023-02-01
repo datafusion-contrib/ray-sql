@@ -1,11 +1,11 @@
 # RaySQL: DataFusion on Ray
 
-This is an experimental research project to evaluate the concept of performing distributed SQL queries from Python, using
+This is a personal research project to evaluate performing distributed SQL queries from Python, using
 [Ray](https://www.ray.io/) and [DataFusion](https://github.com/apache/arrow-datafusion).
 
 ## Example
 
-See [examples/tips.py](examples/tips.py).
+Run the following example live in your browser using a Google Colab [notebook](https://colab.research.google.com/drive/1tmSX0Lu6UFh58_-DBUVoyYx6BoXHOszP?usp=sharing).
 
 ```python
 import ray
@@ -40,11 +40,31 @@ print(result_set)
 
 ## Performance
 
-This chart shows the relative performance of RaySQL compared to other open-source distributed SQL frameworks.
+This chart shows the performance of RaySQL compared to Apache Spark for
+[SQLBench-H](https://sqlbenchmarks.io/sqlbench-h/) at a very small data set (10GB), running on my desktop (Threadripper
+with 24 physical cores). Both RaySQL and Spark are configured with 24 executors.
 
-Performance is looking pretty respectable!
+Note that query 15 is excluded from both results since RaySQL does not support DDL yet.
 
-![SQLBench-H Performance Chart](./docs/sqlbench-h-workstation-10-distributed-perquery.png)
+### Overall Time
+
+RaySQL is ~30% faster overall for this scale factor and environment.
+
+![SQLBench-H Total](./docs/sqlbench-h-total.png)
+
+### Per Query Time
+
+Spark is much faster on some queries, likely due to broadcast exchanges, which RaySQL hasn't implemented yet.
+
+![SQLBench-H Per Query](./docs/sqlbench-h-per-query.png)
+
+### Performance Plan
+
+I'm planning on experimenting with the following changes to improve performance:
+
+- Make better use of Ray futures to run more tasks in parallel
+- Use Ray object store for shuffle data transfer to reduce disk I/O cost
+- Keep upgrading to newer versions of DataFusion to pick up the latest optimizations
 
 ## Building
 

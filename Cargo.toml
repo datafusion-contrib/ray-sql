@@ -4,7 +4,7 @@ description = "RaySQL: DataFusion on Ray"
 homepage = "https://github.com/andygrove/ray-sql"
 repository = "https://github.com/andygrove/ray-sql"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 readme = "README.md"
 license = "Apache-2.0"
@@ -34,3 +34,7 @@ crate-type = ["cdylib", "rlib"]
 
 [package.metadata.maturin]
 name = "raysql._raysql_internal"
+
+[profile.release]
+codegen-units = 1
+lto = true
