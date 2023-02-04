@@ -1,5 +1,5 @@
 import ray
-from raysql import Context
+from raysql import Context, deserialize_execution_plan
 
 @ray.remote
 class Worker:
@@ -8,7 +8,7 @@ class Worker:
         self.debug = False
 
     def execute_query_partition(self, plan_bytes, part):
-        plan = self.ctx.deserialize_execution_plan(plan_bytes)
+        plan = deserialize_execution_plan(plan_bytes)
 
         if self.debug:
             print("Executing partition #{}:\n{}".format(part, plan.display_indent()))
