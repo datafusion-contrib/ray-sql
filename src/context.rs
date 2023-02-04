@@ -78,17 +78,6 @@ impl PyContext {
         Ok(PyExecutionGraph::new(graph))
     }
 
-    fn serialize_execution_plan(&self, plan: PyExecutionPlan) -> PyResult<Vec<u8>> {
-        let codec = ShuffleCodec {};
-        Ok(physical_plan_to_bytes_with_extension_codec(plan.plan, &codec)?.to_vec())
-    }
-
-    fn deserialize_execution_plan(&self, bytes: Vec<u8>) -> PyResult<PyExecutionPlan> {
-        let codec = ShuffleCodec {};
-        Ok(PyExecutionPlan::new(
-            physical_plan_from_bytes_with_extension_codec(&bytes, &self.ctx, &codec)?,
-        ))
-    }
 
     /// Execute a partition of a query plan. This will typically be executing a shuffle write and write the results to disk
     pub fn execute_partition(&self, plan: PyExecutionPlan, part: usize) -> PyResultSet {
@@ -100,6 +89,21 @@ impl PyContext {
             .collect();
         PyResultSet::new(batches)
     }
+}
+
+#[pyfunction]
+pub fn serialize_execution_plan(plan: PyExecutionPlan) -> PyResult<Vec<u8>> {
+    let codec = ShuffleCodec {};
+    Ok(physical_plan_to_bytes_with_extension_codec(plan.plan, &codec)?.to_vec())
+}
+
+#[pyfunction]
+pub fn deserialize_execution_plan(bytes: Vec<u8>) -> PyResult<PyExecutionPlan> {
+    let ctx = SessionContext::new();
+    let codec = ShuffleCodec {};
+    Ok(PyExecutionPlan::new(
+        physical_plan_from_bytes_with_extension_codec(&bytes, &ctx, &codec)?,
+    ))
 }
 
 impl PyContext {

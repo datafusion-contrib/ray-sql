@@ -3,6 +3,16 @@
 This is a personal research project to evaluate performing distributed SQL queries from Python, using
 [Ray](https://www.ray.io/) and [DataFusion](https://github.com/apache/arrow-datafusion).
 
+## Goals
+
+- Demonstrate how easily new systems can be built on top of DataFusion
+- Drive requirements for DataFusion's Python bindings
+- Create content for an interesting blog post or conference talk
+
+## Non Goals
+
+- Build and support a production system
+
 ## Example
 
 Run the following example live in your browser using a Google Colab [notebook](https://colab.research.google.com/drive/1tmSX0Lu6UFh58_-DBUVoyYx6BoXHOszP?usp=sharing).
