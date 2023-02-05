@@ -31,7 +31,7 @@ impl PyContext {
     pub fn new(target_partitions: usize) -> Self {
         let config = SessionConfig::default()
             .with_target_partitions(target_partitions)
-            .with_batch_size(16*1024)
+            .with_batch_size(16 * 1024)
             .with_repartition_aggregations(true)
             .with_repartition_windows(true)
             .with_repartition_joins(true)
@@ -77,7 +77,6 @@ impl PyContext {
 
         Ok(PyExecutionGraph::new(graph))
     }
-
 
     /// Execute a partition of a query plan. This will typically be executing a shuffle write and write the results to disk
     pub fn execute_partition(&self, plan: PyExecutionPlan, part: usize) -> PyResultSet {

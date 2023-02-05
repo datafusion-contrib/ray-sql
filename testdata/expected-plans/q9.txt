@@ -150,10 +150,11 @@ ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "nation"
 
 Query Stage #11:
 ShuffleWriterExec(stage_id=11, output_partitioning=UnknownPartitioning(1))
-  ProjectionExec: expr=[nation@0 as nation, o_year@1 as o_year, SUM(profit.amount)@2 as sum_profit]
-    AggregateExec: mode=FinalPartitioned, gby=[nation@0 as nation, o_year@1 as o_year], aggr=[SUM(profit.amount)]
-      CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=10, input_partitions=4)
+  CoalescePartitionsExec
+    ProjectionExec: expr=[nation@0 as nation, o_year@1 as o_year, SUM(profit.amount)@2 as sum_profit]
+      AggregateExec: mode=FinalPartitioned, gby=[nation@0 as nation, o_year@1 as o_year], aggr=[SUM(profit.amount)]
+        CoalesceBatchesExec: target_batch_size=8192
+          ShuffleReaderExec(stage_id=10, input_partitions=4)
 
 Query Stage #12:
 SortExec: [nation@0 ASC NULLS LAST,o_year@1 DESC]

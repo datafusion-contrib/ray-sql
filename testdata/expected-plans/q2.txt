@@ -242,5 +242,6 @@ ShuffleWriterExec(stage_id=17, output_partitioning=UnknownPartitioning(1))
 
 Query Stage #18:
 GlobalLimitExec: skip=0, fetch=100
-  ShuffleReaderExec(stage_id=17, input_partitions=1)
+  SortPreservingMergeExec: [s_acctbal@0 DESC,n_name@2 ASC NULLS LAST,s_name@1 ASC NULLS LAST,p_partkey@3 ASC NULLS LAST]
+    ShuffleReaderExec(stage_id=17, input_partitions=1)
 

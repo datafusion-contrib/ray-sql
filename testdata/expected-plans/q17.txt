@@ -82,15 +82,16 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "l_partke
 
 Query Stage #5:
 ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
-  AggregateExec: mode=Partial, gby=[], aggr=[SUM(lineitem.l_extendedprice)]
-    CoalesceBatchesExec: target_batch_size=8192
-      FilterExec: CAST(l_quantity@1 AS Decimal128(30, 15)) < CAST(__value@7 AS Decimal128(30, 15))
-        CoalesceBatchesExec: target_batch_size=8192
-          HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "p_partkey", index: 3 }, Column { name: "l_partkey", index: 0 }), (Column { name: "l_partkey", index: 0 }, Column { name: "l_partkey", index: 0 })]
-            CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=2, input_partitions=4)
-            CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=4, input_partitions=4)
+  CoalescePartitionsExec
+    AggregateExec: mode=Partial, gby=[], aggr=[SUM(lineitem.l_extendedprice)]
+      CoalesceBatchesExec: target_batch_size=8192
+        FilterExec: CAST(l_quantity@1 AS Decimal128(30, 15)) < CAST(__value@7 AS Decimal128(30, 15))
+          CoalesceBatchesExec: target_batch_size=8192
+            HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "p_partkey", index: 3 }, Column { name: "l_partkey", index: 0 }), (Column { name: "l_partkey", index: 0 }, Column { name: "l_partkey", index: 0 })]
+              CoalesceBatchesExec: target_batch_size=8192
+                ShuffleReaderExec(stage_id=2, input_partitions=4)
+              CoalesceBatchesExec: target_batch_size=8192
+                ShuffleReaderExec(stage_id=4, input_partitions=4)
 
 Query Stage #6:
 ProjectionExec: expr=[CAST(SUM(lineitem.l_extendedprice)@0 AS Float64) / 7 as avg_yearly]

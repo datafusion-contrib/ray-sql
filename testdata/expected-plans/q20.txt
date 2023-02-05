@@ -139,13 +139,14 @@ ShuffleWriterExec(stage_id=7, output_partitioning=Hash([Column { name: "ps_suppk
 
 Query Stage #8:
 ShuffleWriterExec(stage_id=8, output_partitioning=UnknownPartitioning(1))
-  ProjectionExec: expr=[s_name@1 as s_name, s_address@2 as s_address]
-    CoalesceBatchesExec: target_batch_size=8192
-      HashJoinExec: mode=Partitioned, join_type=LeftSemi, on=[(Column { name: "s_suppkey", index: 0 }, Column { name: "ps_suppkey", index: 0 })]
-        CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=2, input_partitions=4)
-        CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=7, input_partitions=4)
+  CoalescePartitionsExec
+    ProjectionExec: expr=[s_name@1 as s_name, s_address@2 as s_address]
+      CoalesceBatchesExec: target_batch_size=8192
+        HashJoinExec: mode=Partitioned, join_type=LeftSemi, on=[(Column { name: "s_suppkey", index: 0 }, Column { name: "ps_suppkey", index: 0 })]
+          CoalesceBatchesExec: target_batch_size=8192
+            ShuffleReaderExec(stage_id=2, input_partitions=4)
+          CoalesceBatchesExec: target_batch_size=8192
+            ShuffleReaderExec(stage_id=7, input_partitions=4)
 
 Query Stage #9:
 SortExec: [s_name@0 ASC NULLS LAST]

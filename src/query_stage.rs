@@ -1,11 +1,11 @@
 use crate::shuffle::{ShuffleCodec, ShuffleReaderExec};
+use datafusion::error::Result;
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion::prelude::SessionContext;
+use datafusion_proto::bytes::physical_plan_from_bytes_with_extension_codec;
 use datafusion_python::physical_plan::PyExecutionPlan;
 use pyo3::prelude::*;
 use std::sync::Arc;
-use datafusion::prelude::SessionContext;
-use datafusion::error::Result;
-use datafusion_proto::bytes::physical_plan_from_bytes_with_extension_codec;
 
 #[pyclass(name = "QueryStage", module = "raysql", subclass)]
 pub struct PyQueryStage {
@@ -26,10 +26,7 @@ impl PyQueryStage {
         let codec = ShuffleCodec {};
         let plan = physical_plan_from_bytes_with_extension_codec(&bytes, &ctx, &codec)?;
         Ok(PyQueryStage {
-            stage: Arc::new(QueryStage {
-                id,
-                plan
-            })
+            stage: Arc::new(QueryStage { id, plan }),
         })
     }
 

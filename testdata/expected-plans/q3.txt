@@ -97,5 +97,6 @@ ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
 
 Query Stage #6:
 GlobalLimitExec: skip=0, fetch=10
-  ShuffleReaderExec(stage_id=5, input_partitions=1)
+  SortPreservingMergeExec: [revenue@1 DESC,o_orderdate@2 ASC NULLS LAST]
+    ShuffleReaderExec(stage_id=5, input_partitions=1)
 

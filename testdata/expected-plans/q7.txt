@@ -166,10 +166,11 @@ ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "supp_na
 
 Query Stage #11:
 ShuffleWriterExec(stage_id=11, output_partitioning=UnknownPartitioning(1))
-  ProjectionExec: expr=[supp_nation@0 as supp_nation, cust_nation@1 as cust_nation, l_year@2 as l_year, SUM(shipping.volume)@3 as revenue]
-    AggregateExec: mode=FinalPartitioned, gby=[supp_nation@0 as supp_nation, cust_nation@1 as cust_nation, l_year@2 as l_year], aggr=[SUM(shipping.volume)]
-      CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=10, input_partitions=4)
+  CoalescePartitionsExec
+    ProjectionExec: expr=[supp_nation@0 as supp_nation, cust_nation@1 as cust_nation, l_year@2 as l_year, SUM(shipping.volume)@3 as revenue]
+      AggregateExec: mode=FinalPartitioned, gby=[supp_nation@0 as supp_nation, cust_nation@1 as cust_nation, l_year@2 as l_year], aggr=[SUM(shipping.volume)]
+        CoalesceBatchesExec: target_batch_size=8192
+          ShuffleReaderExec(stage_id=10, input_partitions=4)
 
 Query Stage #12:
 SortExec: [supp_nation@0 ASC NULLS LAST,cust_nation@1 ASC NULLS LAST,l_year@2 ASC NULLS LAST]

@@ -149,10 +149,11 @@ ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "n_name"
 
 Query Stage #11:
 ShuffleWriterExec(stage_id=11, output_partitioning=UnknownPartitioning(1))
-  ProjectionExec: expr=[n_name@0 as n_name, SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)@1 as revenue]
-    AggregateExec: mode=FinalPartitioned, gby=[n_name@0 as n_name], aggr=[SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)]
-      CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=10, input_partitions=4)
+  CoalescePartitionsExec
+    ProjectionExec: expr=[n_name@0 as n_name, SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)@1 as revenue]
+      AggregateExec: mode=FinalPartitioned, gby=[n_name@0 as n_name], aggr=[SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)]
+        CoalesceBatchesExec: target_batch_size=8192
+          ShuffleReaderExec(stage_id=10, input_partitions=4)
 
 Query Stage #12:
 SortExec: [revenue@1 DESC]

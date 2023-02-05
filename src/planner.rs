@@ -1,5 +1,5 @@
-use crate::query_stage::QueryStage;
 use crate::query_stage::PyQueryStage;
+use crate::query_stage::QueryStage;
 use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
 use datafusion::error::Result;
 use datafusion::physical_plan::coalesce_partitions::CoalescePartitionsExec;
@@ -27,13 +27,14 @@ impl PyExecutionGraph {
 
 #[pymethods]
 impl PyExecutionGraph {
-
     /// Get a list of stages sorted by id
     pub fn get_query_stages(&self) -> Vec<PyQueryStage> {
         let mut stages = vec![];
         let max_id = self.graph.get_final_query_stage().id;
         for id in 0..=max_id {
-            stages.push(PyQueryStage::from_rust(self.graph.query_stages.get(&id).unwrap().clone()));
+            stages.push(PyQueryStage::from_rust(
+                self.graph.query_stages.get(&id).unwrap().clone(),
+            ));
         }
         stages
     }
@@ -95,8 +96,6 @@ impl ExecutionGraph {
     }
 }
 
-
-
 pub fn make_execution_graph(plan: Arc<dyn ExecutionPlan>) -> Result<ExecutionGraph> {
     let mut graph = ExecutionGraph::new();
     let root = generate_query_stages(plan, &mut graph)?;
@@ -124,22 +123,29 @@ fn generate_query_stages(
                 // just remove these
                 Ok(repart.children()[0].clone())
             }
-            partitioning_scheme => {
-                create_shuffle_exchange(plan.as_ref(), graph, partitioning_scheme.clone())
-            }
+            partitioning_scheme => create_shuffle_exchange(
+                plan.children()[0].clone(),
+                graph,
+                partitioning_scheme.clone(),
+            ),
         }
     } else if plan
         .as_any()
         .downcast_ref::<CoalescePartitionsExec>()
         .is_some()
     {
-        create_shuffle_exchange(plan.as_ref(), graph, Partitioning::UnknownPartitioning(1))
+        create_shuffle_exchange(plan.clone(), graph, Partitioning::UnknownPartitioning(1))
     } else if plan
         .as_any()
         .downcast_ref::<SortPreservingMergeExec>()
         .is_some()
     {
-        create_shuffle_exchange(plan.as_ref(), graph, Partitioning::UnknownPartitioning(1))
+        let new_input = create_shuffle_exchange(
+            plan.children()[0].clone(),
+            graph,
+            Partitioning::UnknownPartitioning(1),
+        )?;
+        with_new_children_if_necessary(plan, vec![new_input])
     } else {
         Ok(plan)
     }
@@ -150,7 +156,7 @@ fn generate_query_stages(
 /// The plan is wrapped in a ShuffleWriteExec and added as a new query plan in the execution graph
 /// and a ShuffleReaderExec is returned to replace the plan.
 fn create_shuffle_exchange(
-    plan: &dyn ExecutionPlan,
+    plan: Arc<dyn ExecutionPlan>,
     graph: &mut ExecutionGraph,
     partitioning_scheme: Partitioning,
 ) -> Result<Arc<dyn ExecutionPlan>> {
@@ -160,7 +166,7 @@ fn create_shuffle_exchange(
     // create temp dir for stage shuffle files
     let temp_dir = create_temp_dir(stage_id)?;
 
-    let shuffle_writer_input = plan.children()[0].clone();
+    let shuffle_writer_input = plan.clone();
     let shuffle_writer = ShuffleWriterExec::new(
         stage_id,
         shuffle_writer_input,

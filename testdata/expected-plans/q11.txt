@@ -117,9 +117,10 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "ps_partk
 
 Query Stage #5:
 ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
-  AggregateExec: mode=FinalPartitioned, gby=[ps_partkey@0 as ps_partkey], aggr=[SUM(partsupp.ps_supplycost * partsupp.ps_availqty)]
-    CoalesceBatchesExec: target_batch_size=8192
-      ShuffleReaderExec(stage_id=4, input_partitions=4)
+  CoalescePartitionsExec
+    AggregateExec: mode=FinalPartitioned, gby=[ps_partkey@0 as ps_partkey], aggr=[SUM(partsupp.ps_supplycost * partsupp.ps_availqty)]
+      CoalesceBatchesExec: target_batch_size=8192
+        ShuffleReaderExec(stage_id=4, input_partitions=4)
 
 Query Stage #6:
 ShuffleWriterExec(stage_id=6, output_partitioning=Hash([Column { name: "s_suppkey", index: 0 }], 4))
@@ -147,13 +148,14 @@ ShuffleWriterExec(stage_id=9, output_partitioning=Hash([Column { name: "n_nation
 
 Query Stage #10:
 ShuffleWriterExec(stage_id=10, output_partitioning=UnknownPartitioning(1))
-  AggregateExec: mode=Partial, gby=[], aggr=[SUM(partsupp.ps_supplycost * partsupp.ps_availqty)]
-    CoalesceBatchesExec: target_batch_size=8192
-      HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "s_nationkey", index: 4 }, Column { name: "n_nationkey", index: 0 })]
-        CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=8, input_partitions=4)
-        CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=9, input_partitions=4)
+  CoalescePartitionsExec
+    AggregateExec: mode=Partial, gby=[], aggr=[SUM(partsupp.ps_supplycost * partsupp.ps_availqty)]
+      CoalesceBatchesExec: target_batch_size=8192
+        HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "s_nationkey", index: 4 }, Column { name: "n_nationkey", index: 0 })]
+          CoalesceBatchesExec: target_batch_size=8192
+            ShuffleReaderExec(stage_id=8, input_partitions=4)
+          CoalesceBatchesExec: target_batch_size=8192
+            ShuffleReaderExec(stage_id=9, input_partitions=4)
 
 Query Stage #11:
 SortExec: [value@1 DESC]
