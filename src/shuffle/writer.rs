@@ -5,6 +5,7 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::common::{Result, Statistics};
 use datafusion::execution::context::TaskContext;
+use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::common::{batch_byte_size, IPCWriter};
 use datafusion::physical_plan::memory::MemoryStream;
@@ -45,6 +46,17 @@ impl ShuffleWriterExec {
         partitioning: Partitioning,
         shuffle_dir: &str,
     ) -> Self {
+        // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
+        let partitioning = match partitioning {
+            Partitioning::Hash(expr, n) => Partitioning::Hash(
+                expr.into_iter()
+                    .filter(|e| e.as_any().downcast_ref::<UnKnownColumn>().is_none())
+                    .collect(),
+                n,
+            ),
+            _ => partitioning,
+        };
+
         Self {
             stage_id,
             plan,

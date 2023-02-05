@@ -70,9 +70,9 @@ ShuffleWriterExec(stage_id=2, output_partitioning=Hash([Column { name: "ps_suppk
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "ps_partkey", index: 0 }, Column { name: "p_partkey", index: 0 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=0, input_partitions=4)
+        ShuffleReaderExec(stage_id=0, input_partitioning=Hash([Column { name: "ps_partkey", index: 0 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=1, input_partitions=4)
+        ShuffleReaderExec(stage_id=1, input_partitioning=Hash([Column { name: "p_partkey", index: 0 }], 4))
 
 Query Stage #3:
 ShuffleWriterExec(stage_id=3, output_partitioning=Hash([Column { name: "s_suppkey", index: 0 }], 4))
@@ -87,16 +87,16 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "group_al
     CoalesceBatchesExec: target_batch_size=8192
       HashJoinExec: mode=Partitioned, join_type=LeftAnti, on=[(Column { name: "ps_suppkey", index: 1 }, Column { name: "s_suppkey", index: 0 })]
         CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=2, input_partitions=4)
+          ShuffleReaderExec(stage_id=2, input_partitioning=Hash([Column { name: "ps_suppkey", index: 1 }], 4))
         CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=3, input_partitions=4)
+          ShuffleReaderExec(stage_id=3, input_partitioning=Hash([Column { name: "s_suppkey", index: 0 }], 4))
 
 Query Stage #5:
 ShuffleWriterExec(stage_id=5, output_partitioning=Hash([Column { name: "group_alias_0", index: 0 }, Column { name: "group_alias_1", index: 1 }, Column { name: "group_alias_2", index: 2 }], 4))
   AggregateExec: mode=Partial, gby=[group_alias_0@0 as group_alias_0, group_alias_1@1 as group_alias_1, group_alias_2@2 as group_alias_2], aggr=[COUNT(alias1)]
     AggregateExec: mode=FinalPartitioned, gby=[group_alias_0@0 as group_alias_0, group_alias_1@1 as group_alias_1, group_alias_2@2 as group_alias_2, alias1@3 as alias1], aggr=[]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=4, input_partitions=4)
+        ShuffleReaderExec(stage_id=4, input_partitioning=Hash([Column { name: "group_alias_0", index: 0 }, Column { name: "group_alias_1", index: 1 }, Column { name: "group_alias_2", index: 2 }, Column { name: "alias1", index: 3 }], 4))
 
 Query Stage #6:
 ShuffleWriterExec(stage_id=6, output_partitioning=UnknownPartitioning(1))
@@ -104,9 +104,9 @@ ShuffleWriterExec(stage_id=6, output_partitioning=UnknownPartitioning(1))
     ProjectionExec: expr=[group_alias_0@0 as part.p_brand, group_alias_1@1 as part.p_type, group_alias_2@2 as part.p_size, COUNT(alias1)@3 as COUNT(DISTINCT partsupp.ps_suppkey)]
       AggregateExec: mode=FinalPartitioned, gby=[group_alias_0@0 as group_alias_0, group_alias_1@1 as group_alias_1, group_alias_2@2 as group_alias_2], aggr=[COUNT(alias1)]
         CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=5, input_partitions=4)
+          ShuffleReaderExec(stage_id=5, input_partitioning=Hash([Column { name: "group_alias_0", index: 0 }, Column { name: "group_alias_1", index: 1 }, Column { name: "group_alias_2", index: 2 }], 4))
 
 Query Stage #7:
 SortExec: [supplier_cnt@3 DESC,p_brand@0 ASC NULLS LAST,p_type@1 ASC NULLS LAST,p_size@2 ASC NULLS LAST]
-  ShuffleReaderExec(stage_id=6, input_partitions=1)
+  ShuffleReaderExec(stage_id=6, input_partitioning=UnknownPartitioning(1))
 

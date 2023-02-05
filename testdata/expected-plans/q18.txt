@@ -70,9 +70,9 @@ ShuffleWriterExec(stage_id=2, output_partitioning=Hash([Column { name: "o_orderk
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "c_custkey", index: 0 }, Column { name: "o_custkey", index: 1 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=0, input_partitions=4)
+        ShuffleReaderExec(stage_id=0, input_partitioning=Hash([Column { name: "c_custkey", index: 0 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=1, input_partitions=4)
+        ShuffleReaderExec(stage_id=1, input_partitioning=Hash([Column { name: "o_custkey", index: 1 }], 4))
 
 Query Stage #3:
 ShuffleWriterExec(stage_id=3, output_partitioning=Hash([Column { name: "l_orderkey", index: 0 }], 4))
@@ -91,15 +91,15 @@ ShuffleWriterExec(stage_id=5, output_partitioning=Hash([Column { name: "c_name",
         CoalesceBatchesExec: target_batch_size=8192
           HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "o_orderkey", index: 2 }, Column { name: "l_orderkey", index: 0 })]
             CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=2, input_partitions=4)
+              ShuffleReaderExec(stage_id=2, input_partitioning=Hash([Column { name: "o_orderkey", index: 2 }], 4))
             CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=3, input_partitions=4)
+              ShuffleReaderExec(stage_id=3, input_partitioning=Hash([Column { name: "l_orderkey", index: 0 }], 4))
         ProjectionExec: expr=[l_orderkey@0 as l_orderkey]
           CoalesceBatchesExec: target_batch_size=8192
             FilterExec: SUM(lineitem.l_quantity)@1 > Some(31300),21,2
               AggregateExec: mode=FinalPartitioned, gby=[l_orderkey@0 as l_orderkey], aggr=[SUM(lineitem.l_quantity)]
                 CoalesceBatchesExec: target_batch_size=8192
-                  ShuffleReaderExec(stage_id=4, input_partitions=4)
+                  ShuffleReaderExec(stage_id=4, input_partitioning=Hash([Column { name: "l_orderkey", index: 0 }], 4))
 
 Query Stage #6:
 ShuffleWriterExec(stage_id=6, output_partitioning=Hash([Column { name: "c_name", index: 0 }, Column { name: "c_custkey", index: 1 }, Column { name: "o_orderkey", index: 2 }, Column { name: "o_orderdate", index: 3 }, Column { name: "o_totalprice", index: 4 }], 4))
@@ -107,10 +107,10 @@ ShuffleWriterExec(stage_id=6, output_partitioning=Hash([Column { name: "c_name",
     ProjectionExec: expr=[c_name@0 as c_name, c_custkey@1 as c_custkey, o_orderkey@2 as o_orderkey, o_orderdate@3 as o_orderdate, o_totalprice@4 as o_totalprice, SUM(lineitem.l_quantity)@5 as SUM(lineitem.l_quantity)]
       AggregateExec: mode=FinalPartitioned, gby=[c_name@0 as c_name, c_custkey@1 as c_custkey, o_orderkey@2 as o_orderkey, o_orderdate@3 as o_orderdate, o_totalprice@4 as o_totalprice], aggr=[SUM(lineitem.l_quantity)]
         CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=5, input_partitions=4)
+          ShuffleReaderExec(stage_id=5, input_partitioning=Hash([Column { name: "c_name", index: 0 }, Column { name: "c_custkey", index: 1 }, Column { name: "o_orderkey", index: 2 }, Column { name: "o_orderdate", index: 3 }, Column { name: "o_totalprice", index: 4 }], 4))
 
 Query Stage #7:
 GlobalLimitExec: skip=0, fetch=100
   SortPreservingMergeExec: [o_totalprice@4 DESC,o_orderdate@3 ASC NULLS LAST]
-    ShuffleReaderExec(stage_id=6, input_partitions=4)
+    ShuffleReaderExec(stage_id=6, input_partitioning=Hash([Column { name: "c_name", index: 0 }, Column { name: "c_custkey", index: 1 }, Column { name: "o_orderkey", index: 2 }, Column { name: "o_orderdate", index: 3 }, Column { name: "o_totalprice", index: 4 }], 4))
 

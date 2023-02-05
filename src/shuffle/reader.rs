@@ -18,6 +18,7 @@ use std::fs::File;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use datafusion::physical_expr::expressions::UnKnownColumn;
 
 #[derive(Debug)]
 pub struct ShuffleReaderExec {
@@ -38,6 +39,19 @@ impl ShuffleReaderExec {
         partitioning: Partitioning,
         shuffle_dir: &str,
     ) -> Self {
+
+        // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
+        let partitioning = match partitioning {
+            Partitioning::Hash(expr, n) => Partitioning::Hash(
+                expr.into_iter()
+                    .filter(|e| e.as_any().downcast_ref::<UnKnownColumn>().is_none())
+                    .collect(),
+                n,
+            ),
+            _ => partitioning,
+        };
+
+
         Self {
             stage_id,
             schema,
@@ -107,9 +121,9 @@ impl ExecutionPlan for ShuffleReaderExec {
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "ShuffleReaderExec(stage_id={}, input_partitions={})",
+            "ShuffleReaderExec(stage_id={}, input_partitioning={:?})",
             self.stage_id,
-            self.partitioning.partition_count()
+            self.partitioning
         )
     }
 

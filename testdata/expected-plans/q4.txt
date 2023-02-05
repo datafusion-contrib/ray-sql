@@ -54,18 +54,18 @@ ShuffleWriterExec(stage_id=2, output_partitioning=Hash([Column { name: "o_orderp
     CoalesceBatchesExec: target_batch_size=8192
       HashJoinExec: mode=Partitioned, join_type=LeftSemi, on=[(Column { name: "o_orderkey", index: 0 }, Column { name: "l_orderkey", index: 0 })]
         CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=0, input_partitions=4)
+          ShuffleReaderExec(stage_id=0, input_partitioning=Hash([Column { name: "o_orderkey", index: 0 }], 4))
         CoalesceBatchesExec: target_batch_size=8192
-          ShuffleReaderExec(stage_id=1, input_partitions=4)
+          ShuffleReaderExec(stage_id=1, input_partitioning=Hash([Column { name: "l_orderkey", index: 0 }], 4))
 
 Query Stage #3:
 ShuffleWriterExec(stage_id=3, output_partitioning=UnknownPartitioning(1))
   ProjectionExec: expr=[o_orderpriority@0 as o_orderpriority, COUNT(UInt8(1))@1 as order_count]
     AggregateExec: mode=FinalPartitioned, gby=[o_orderpriority@0 as o_orderpriority], aggr=[COUNT(UInt8(1))]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=2, input_partitions=4)
+        ShuffleReaderExec(stage_id=2, input_partitioning=Hash([Column { name: "o_orderpriority", index: 0 }], 4))
 
 Query Stage #4:
 SortExec: [o_orderpriority@0 ASC NULLS LAST]
-  ShuffleReaderExec(stage_id=3, input_partitions=1)
+  ShuffleReaderExec(stage_id=3, input_partitioning=UnknownPartitioning(1))
 

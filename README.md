@@ -5,13 +5,14 @@ This is a personal research project to evaluate performing distributed SQL queri
 
 ## Goals
 
-- Demonstrate how easily new systems can be built on top of DataFusion
-- Drive requirements for DataFusion's Python bindings
-- Create content for an interesting blog post or conference talk
+- Demonstrate how easily new systems can be built on top of DataFusion. See the [design documentation](./docs/README.md)
+  to understand how RaySQL works.
+- Drive requirements for DataFusion's [Python bindings](https://github.com/apache/arrow-datafusion-python).
+- Create content for an interesting blog post or conference talk.
 
 ## Non Goals
 
-- Build and support a production system
+- Build and support a production system.
 
 ## Example
 

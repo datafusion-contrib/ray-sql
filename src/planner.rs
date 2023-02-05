@@ -134,7 +134,11 @@ fn generate_query_stages(
         .downcast_ref::<CoalescePartitionsExec>()
         .is_some()
     {
-        create_shuffle_exchange(plan.children()[0].clone(), graph, Partitioning::UnknownPartitioning(1))
+        create_shuffle_exchange(
+            plan.children()[0].clone(),
+            graph,
+            Partitioning::UnknownPartitioning(1),
+        )
     } else if plan
         .as_any()
         .downcast_ref::<SortPreservingMergeExec>()
@@ -142,11 +146,7 @@ fn generate_query_stages(
     {
         let partitioned_sort_plan = plan.children()[0].clone();
         let partitioning_scheme = partitioned_sort_plan.output_partitioning();
-        let new_input = create_shuffle_exchange(
-            partitioned_sort_plan,
-            graph,
-            partitioning_scheme,
-        )?;
+        let new_input = create_shuffle_exchange(partitioned_sort_plan, graph, partitioning_scheme)?;
         with_new_children_if_necessary(plan, vec![new_input])
     } else {
         Ok(plan)

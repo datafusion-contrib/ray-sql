@@ -116,9 +116,9 @@ ShuffleWriterExec(stage_id=2, output_partitioning=Hash([Column { name: "l_suppke
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "p_partkey", index: 0 }, Column { name: "l_partkey", index: 1 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=0, input_partitions=4)
+        ShuffleReaderExec(stage_id=0, input_partitioning=Hash([Column { name: "p_partkey", index: 0 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=1, input_partitions=4)
+        ShuffleReaderExec(stage_id=1, input_partitioning=Hash([Column { name: "l_partkey", index: 1 }], 4))
 
 Query Stage #3:
 ShuffleWriterExec(stage_id=3, output_partitioning=Hash([Column { name: "s_suppkey", index: 0 }], 4))
@@ -129,9 +129,9 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "l_orderk
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "l_suppkey", index: 4 }, Column { name: "s_suppkey", index: 0 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=2, input_partitions=4)
+        ShuffleReaderExec(stage_id=2, input_partitioning=Hash([Column { name: "l_suppkey", index: 4 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=3, input_partitions=4)
+        ShuffleReaderExec(stage_id=3, input_partitioning=Hash([Column { name: "s_suppkey", index: 0 }], 4))
 
 Query Stage #5:
 ShuffleWriterExec(stage_id=5, output_partitioning=Hash([Column { name: "o_orderkey", index: 0 }], 4))
@@ -144,9 +144,9 @@ ShuffleWriterExec(stage_id=6, output_partitioning=Hash([Column { name: "o_custke
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "l_orderkey", index: 2 }, Column { name: "o_orderkey", index: 0 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=4, input_partitions=4)
+        ShuffleReaderExec(stage_id=4, input_partitioning=Hash([Column { name: "l_orderkey", index: 2 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=5, input_partitions=4)
+        ShuffleReaderExec(stage_id=5, input_partitioning=Hash([Column { name: "o_orderkey", index: 0 }], 4))
 
 Query Stage #7:
 ShuffleWriterExec(stage_id=7, output_partitioning=Hash([Column { name: "c_custkey", index: 0 }], 4))
@@ -157,9 +157,9 @@ ShuffleWriterExec(stage_id=8, output_partitioning=Hash([Column { name: "c_nation
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "o_custkey", index: 10 }, Column { name: "c_custkey", index: 0 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=6, input_partitions=4)
+        ShuffleReaderExec(stage_id=6, input_partitioning=Hash([Column { name: "o_custkey", index: 10 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=7, input_partitions=4)
+        ShuffleReaderExec(stage_id=7, input_partitioning=Hash([Column { name: "c_custkey", index: 0 }], 4))
 
 Query Stage #9:
 ShuffleWriterExec(stage_id=9, output_partitioning=Hash([Column { name: "n_nationkey", index: 0 }], 4))
@@ -170,9 +170,9 @@ ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "s_natio
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "c_nationkey", index: 13 }, Column { name: "n_nationkey", index: 0 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=8, input_partitions=4)
+        ShuffleReaderExec(stage_id=8, input_partitioning=Hash([Column { name: "c_nationkey", index: 13 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=9, input_partitions=4)
+        ShuffleReaderExec(stage_id=9, input_partitioning=Hash([Column { name: "n_nationkey", index: 0 }], 4))
 
 Query Stage #11:
 ShuffleWriterExec(stage_id=11, output_partitioning=Hash([Column { name: "n_nationkey", index: 0 }], 4))
@@ -183,9 +183,9 @@ ShuffleWriterExec(stage_id=12, output_partitioning=Hash([Column { name: "n_regio
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "s_nationkey", index: 8 }, Column { name: "n_nationkey", index: 0 })]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=10, input_partitions=4)
+        ShuffleReaderExec(stage_id=10, input_partitioning=Hash([Column { name: "s_nationkey", index: 8 }], 4))
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=11, input_partitions=4)
+        ShuffleReaderExec(stage_id=11, input_partitioning=Hash([Column { name: "n_nationkey", index: 0 }], 4))
 
 Query Stage #13:
 ShuffleWriterExec(stage_id=13, output_partitioning=Hash([Column { name: "r_regionkey", index: 0 }], 4))
@@ -201,18 +201,18 @@ ShuffleWriterExec(stage_id=14, output_partitioning=Hash([Column { name: "o_year"
         CoalesceBatchesExec: target_batch_size=8192
           HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "n_regionkey", index: 15 }, Column { name: "r_regionkey", index: 0 })]
             CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=12, input_partitions=4)
+              ShuffleReaderExec(stage_id=12, input_partitioning=Hash([Column { name: "n_regionkey", index: 15 }], 4))
             CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=13, input_partitions=4)
+              ShuffleReaderExec(stage_id=13, input_partitioning=Hash([Column { name: "r_regionkey", index: 0 }], 4))
 
 Query Stage #15:
 ShuffleWriterExec(stage_id=15, output_partitioning=UnknownPartitioning(1))
   ProjectionExec: expr=[o_year@0 as o_year, SUM(CASE WHEN all_nations.nation = Utf8("IRAQ") THEN all_nations.volume ELSE Int64(0) END)@1 / SUM(all_nations.volume)@2 as mkt_share]
     AggregateExec: mode=FinalPartitioned, gby=[o_year@0 as o_year], aggr=[SUM(CASE WHEN all_nations.nation = Utf8("IRAQ") THEN all_nations.volume ELSE Int64(0) END), SUM(all_nations.volume)]
       CoalesceBatchesExec: target_batch_size=8192
-        ShuffleReaderExec(stage_id=14, input_partitions=4)
+        ShuffleReaderExec(stage_id=14, input_partitioning=Hash([Column { name: "o_year", index: 0 }], 4))
 
 Query Stage #16:
 SortExec: [o_year@0 ASC NULLS LAST]
-  ShuffleReaderExec(stage_id=15, input_partitions=1)
+  ShuffleReaderExec(stage_id=15, input_partitioning=UnknownPartitioning(1))
 

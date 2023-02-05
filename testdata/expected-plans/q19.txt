@@ -55,12 +55,12 @@ ShuffleWriterExec(stage_id=2, output_partitioning=UnknownPartitioning(1))
         CoalesceBatchesExec: target_batch_size=8192
           HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "l_partkey", index: 0 }, Column { name: "p_partkey", index: 0 })]
             CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=0, input_partitions=4)
+              ShuffleReaderExec(stage_id=0, input_partitioning=Hash([Column { name: "l_partkey", index: 0 }], 4))
             CoalesceBatchesExec: target_batch_size=8192
-              ShuffleReaderExec(stage_id=1, input_partitions=4)
+              ShuffleReaderExec(stage_id=1, input_partitioning=Hash([Column { name: "p_partkey", index: 0 }], 4))
 
 Query Stage #3:
 ProjectionExec: expr=[SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)@0 as revenue]
   AggregateExec: mode=Final, gby=[], aggr=[SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)]
-    ShuffleReaderExec(stage_id=2, input_partitions=1)
+    ShuffleReaderExec(stage_id=2, input_partitioning=UnknownPartitioning(1))
 

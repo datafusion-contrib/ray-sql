@@ -203,12 +203,12 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "l_orderk
           ShuffleReaderExec(stage_id=3, input_partitions=4)
 ```
 
-Now we perform the final aggregate to merge the results of the the parallel aggregates. This query plan outputs a single partition but
-will read inputs from 4 partitions, so this is a "reduce" step in map-reduce terminology. The data is also sorted before written to disk.
+Now we perform a final aggregate (which is maybe redundant?) and then sort the results in parallel across the
+partitions.
 
 ```text
 Query Stage #5:
-ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=5, output_partitioning=Hash([Column { name: "l_orderkey", index: 0 }, Column { name: "o_orderdate", index: 2 }, Column { name: "o_shippriority", index: 3 }], 4))
   SortExec: [revenue@1 DESC,o_orderdate@2 ASC NULLS LAST]
     ProjectionExec: expr=[l_orderkey@0 as l_orderkey, SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)@3 as revenue, o_orderdate@1 as o_orderdate, o_shippriority@2 as o_shippriority]
       AggregateExec: mode=FinalPartitioned, gby=[l_orderkey@0 as l_orderkey, o_orderdate@1 as o_orderdate, o_shippriority@2 as o_shippriority], aggr=[SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)]
@@ -216,13 +216,14 @@ ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
           ShuffleReaderExec(stage_id=4, input_partitions=4)
 ```
 
-Finally we have a query stage to read this single partition and apply the `LIMIT` clause. This should really have
-happened as part of the query stage and is a limitation of the current design.
+Finally, we have a query stage that reads the sorted results and merges them into a single partition (preserving the
+sort order) and applies the `LIMIT` clause.
 
 ```text
 Query Stage #6:
 GlobalLimitExec: skip=0, fetch=10
-  ShuffleReaderExec(stage_id=5, input_partitions=1)
+  SortPreservingMergeExec: [revenue@1 DESC,o_orderdate@2 ASC NULLS LAST]
+    ShuffleReaderExec(stage_id=5, input_partitions=4)
 ```
 
 ## Distributed Scheduling

@@ -30,5 +30,5 @@ ShuffleWriterExec(stage_id=0, output_partitioning=UnknownPartitioning(1))
 Query Stage #1:
 ProjectionExec: expr=[SUM(lineitem.l_extendedprice * lineitem.l_discount)@0 as revenue]
   AggregateExec: mode=Final, gby=[], aggr=[SUM(lineitem.l_extendedprice * lineitem.l_discount)]
-    ShuffleReaderExec(stage_id=0, input_partitions=1)
+    ShuffleReaderExec(stage_id=0, input_partitioning=UnknownPartitioning(1))
 
