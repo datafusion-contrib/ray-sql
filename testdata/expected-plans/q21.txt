@@ -82,17 +82,17 @@ GlobalLimitExec: skip=0, fetch=100
 RaySQL Plan
 ===========
 
-Query Stage #0:
+Query Stage #0 (4 -> 4):
 ShuffleWriterExec(stage_id=0, output_partitioning=Hash([Column { name: "s_suppkey", index: 0 }], 4))
   ParquetExec: limit=None, partitions={4 groups: [[mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-5.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-10.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-11.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-13.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-6.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-14.parquet], [mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-20.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-2.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-22.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-19.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-0.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-16.parquet], [mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-21.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-23.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-4.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-17.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-9.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-1.parquet], [mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-18.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-8.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-12.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-15.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-7.parquet, mnt/bigdata/tpch/sf10-parquet/supplier.parquet/part-3.parquet]]}, projection=[s_suppkey, s_name, s_nationkey]
 
-Query Stage #1:
+Query Stage #1 (4 -> 4):
 ShuffleWriterExec(stage_id=1, output_partitioning=Hash([Column { name: "l_suppkey", index: 1 }], 4))
   CoalesceBatchesExec: target_batch_size=8192
     FilterExec: l_receiptdate@3 > l_commitdate@2
       ParquetExec: limit=None, partitions={4 groups: [[mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-5.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-10.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-11.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-13.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-6.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-14.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-20.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-2.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-22.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-19.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-0.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-16.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-21.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-23.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-4.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-17.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-9.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-1.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-18.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-8.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-12.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-15.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-7.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-3.parquet]]}, predicate=l_receiptdate > l_commitdate, projection=[l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
 
-Query Stage #2:
+Query Stage #2 (4 -> 4):
 ShuffleWriterExec(stage_id=2, output_partitioning=Hash([Column { name: "l_orderkey", index: 3 }], 4))
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "s_suppkey", index: 0 }, Column { name: "l_suppkey", index: 1 })]
@@ -101,13 +101,13 @@ ShuffleWriterExec(stage_id=2, output_partitioning=Hash([Column { name: "l_orderk
       CoalesceBatchesExec: target_batch_size=8192
         ShuffleReaderExec(stage_id=1, input_partitioning=Hash([Column { name: "l_suppkey", index: 1 }], 4))
 
-Query Stage #3:
+Query Stage #3 (4 -> 4):
 ShuffleWriterExec(stage_id=3, output_partitioning=Hash([Column { name: "o_orderkey", index: 0 }], 4))
   CoalesceBatchesExec: target_batch_size=8192
     FilterExec: o_orderstatus@1 = F
       ParquetExec: limit=None, partitions={4 groups: [[mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-5.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-10.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-11.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-13.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-6.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-14.parquet], [mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-20.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-2.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-22.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-19.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-0.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-16.parquet], [mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-21.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-23.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-4.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-17.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-9.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-1.parquet], [mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-18.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-8.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-12.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-15.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-7.parquet, mnt/bigdata/tpch/sf10-parquet/orders.parquet/part-3.parquet]]}, predicate=o_orderstatus = Utf8("F"), pruning_predicate=o_orderstatus_min@0 <= F AND F <= o_orderstatus_max@1, projection=[o_orderkey, o_orderstatus]
 
-Query Stage #4:
+Query Stage #4 (4 -> 4):
 ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "s_nationkey", index: 2 }], 4))
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "l_orderkey", index: 3 }, Column { name: "o_orderkey", index: 0 })]
@@ -116,13 +116,13 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "s_nation
       CoalesceBatchesExec: target_batch_size=8192
         ShuffleReaderExec(stage_id=3, input_partitioning=Hash([Column { name: "o_orderkey", index: 0 }], 4))
 
-Query Stage #5:
+Query Stage #5 (1 -> 4):
 ShuffleWriterExec(stage_id=5, output_partitioning=Hash([Column { name: "n_nationkey", index: 0 }], 4))
   CoalesceBatchesExec: target_batch_size=8192
     FilterExec: n_name@1 = ARGENTINA
       ParquetExec: limit=None, partitions={1 group: [[mnt/bigdata/tpch/sf10-parquet/nation.parquet/part-0.parquet]]}, predicate=n_name = Utf8("ARGENTINA"), pruning_predicate=n_name_min@0 <= ARGENTINA AND ARGENTINA <= n_name_max@1, projection=[n_nationkey, n_name]
 
-Query Stage #6:
+Query Stage #6 (4 -> 4):
 ShuffleWriterExec(stage_id=6, output_partitioning=Hash([Column { name: "l_orderkey", index: 3 }], 4))
   CoalesceBatchesExec: target_batch_size=8192
     HashJoinExec: mode=Partitioned, join_type=Inner, on=[(Column { name: "s_nationkey", index: 2 }, Column { name: "n_nationkey", index: 0 })]
@@ -131,17 +131,17 @@ ShuffleWriterExec(stage_id=6, output_partitioning=Hash([Column { name: "l_orderk
       CoalesceBatchesExec: target_batch_size=8192
         ShuffleReaderExec(stage_id=5, input_partitioning=Hash([Column { name: "n_nationkey", index: 0 }], 4))
 
-Query Stage #7:
+Query Stage #7 (4 -> 4):
 ShuffleWriterExec(stage_id=7, output_partitioning=Hash([Column { name: "l_orderkey", index: 0 }], 4))
   ParquetExec: limit=None, partitions={4 groups: [[mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-5.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-10.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-11.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-13.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-6.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-14.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-20.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-2.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-22.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-19.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-0.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-16.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-21.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-23.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-4.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-17.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-9.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-1.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-18.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-8.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-12.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-15.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-7.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-3.parquet]]}, projection=[l_orderkey, l_suppkey]
 
-Query Stage #8:
+Query Stage #8 (4 -> 4):
 ShuffleWriterExec(stage_id=8, output_partitioning=Hash([Column { name: "l_orderkey", index: 0 }], 4))
   CoalesceBatchesExec: target_batch_size=8192
     FilterExec: l_receiptdate@3 > l_commitdate@2
       ParquetExec: limit=None, partitions={4 groups: [[mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-5.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-10.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-11.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-13.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-6.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-14.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-20.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-2.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-22.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-19.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-0.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-16.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-21.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-23.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-4.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-17.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-9.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-1.parquet], [mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-18.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-8.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-12.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-15.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-7.parquet, mnt/bigdata/tpch/sf10-parquet/lineitem.parquet/part-3.parquet]]}, predicate=l_receiptdate > l_commitdate, projection=[l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
 
-Query Stage #9:
+Query Stage #9 (4 -> 4):
 ShuffleWriterExec(stage_id=9, output_partitioning=Hash([Column { name: "s_name", index: 0 }], 4))
   AggregateExec: mode=Partial, gby=[s_name@1 as s_name], aggr=[COUNT(UInt8(1))]
     CoalesceBatchesExec: target_batch_size=8192
@@ -155,7 +155,7 @@ ShuffleWriterExec(stage_id=9, output_partitioning=Hash([Column { name: "s_name",
         CoalesceBatchesExec: target_batch_size=8192
           ShuffleReaderExec(stage_id=8, input_partitioning=Hash([Column { name: "l_orderkey", index: 0 }], 4))
 
-Query Stage #10:
+Query Stage #10 (4 -> 4):
 ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "s_name", index: 0 }], 4))
   SortExec: [numwait@1 DESC,s_name@0 ASC NULLS LAST]
     ProjectionExec: expr=[s_name@0 as s_name, COUNT(UInt8(1))@1 as numwait]
@@ -163,7 +163,7 @@ ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "s_name"
         CoalesceBatchesExec: target_batch_size=8192
           ShuffleReaderExec(stage_id=9, input_partitioning=Hash([Column { name: "s_name", index: 0 }], 4))
 
-Query Stage #11:
+Query Stage #11 (1 -> 1):
 GlobalLimitExec: skip=0, fetch=100
   SortPreservingMergeExec: [numwait@1 DESC,s_name@0 ASC NULLS LAST]
     ShuffleReaderExec(stage_id=10, input_partitioning=Hash([Column { name: "s_name", index: 0 }], 4))

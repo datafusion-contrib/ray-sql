@@ -63,7 +63,7 @@ Note that query 15 is excluded from both results since RaySQL does not support D
 
 ### Overall Time
 
-RaySQL is ~30% faster overall for this scale factor and environment.
+RaySQL is ~65% faster overall for this scale factor and environment.
 
 ![SQLBench-H Total](./docs/sqlbench-h-total.png)
 

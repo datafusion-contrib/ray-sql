@@ -71,7 +71,11 @@ impl QueryStage {
     /// Get the input partition count. This is the same as the number of concurrent tasks
     /// when we schedule this query stage for execution
     pub fn get_input_partition_count(&self) -> usize {
-        collect_input_partition_count(self.plan.as_ref())
+        self.plan.children()[0].output_partitioning().partition_count()
+    }
+
+    pub fn get_output_partition_count(&self) -> usize {
+        self.plan.output_partitioning().partition_count()
     }
 }
 
@@ -82,15 +86,5 @@ fn collect_child_stage_ids(plan: &dyn ExecutionPlan, ids: &mut Vec<usize>) {
         for child_plan in plan.children() {
             collect_child_stage_ids(child_plan.as_ref(), ids);
         }
-    }
-}
-
-fn collect_input_partition_count(plan: &dyn ExecutionPlan) -> usize {
-    if plan.children().is_empty() {
-        plan.output_partitioning().partition_count()
-    } else {
-        // invariants:
-        // - all inputs must have the same partition count
-        collect_input_partition_count(plan.children()[0].as_ref())
     }
 }

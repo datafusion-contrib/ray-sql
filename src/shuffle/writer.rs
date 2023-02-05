@@ -46,14 +46,17 @@ impl ShuffleWriterExec {
         partitioning: Partitioning,
         shuffle_dir: &str,
     ) -> Self {
-        // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
         let partitioning = match partitioning {
-            Partitioning::Hash(expr, n) => Partitioning::Hash(
-                expr.into_iter()
-                    .filter(|e| e.as_any().downcast_ref::<UnKnownColumn>().is_none())
-                    .collect(),
-                n,
-            ),
+            Partitioning::Hash(expr, n) if expr.is_empty() => Partitioning::UnknownPartitioning(n),
+            Partitioning::Hash(expr, n) => {
+                // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
+                Partitioning::Hash(
+                    expr.into_iter()
+                        .filter(|e| e.as_any().downcast_ref::<UnKnownColumn>().is_none())
+                        .collect(),
+                    n,
+                )
+            },
             _ => partitioning,
         };
 
@@ -126,82 +129,90 @@ impl ExecutionPlan for ShuffleWriterExec {
         let shuffle_dir = self.shuffle_dir.clone();
 
         let results = async move {
-            if partition_count == 1 {
-                // stream the results from the query
-                let file = format!("/{shuffle_dir}/shuffle_{stage_id}_{input_partition}_0.arrow",);
-                debug!("Executing query and writing results to {file}");
-                let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
-                debug!(
-                    "Query completed. Shuffle write time: {}. Rows: {}.",
-                    write_time, stats.num_rows
-                );
-            } else {
-                // we won't necessary produce output for every possible partition, so we
-                // create writers on demand
-                let mut writers: Vec<Option<IPCWriter>> = vec![];
-                for _ in 0..partition_count {
-                    writers.push(None);
+            match &partitioning {
+                Partitioning::RoundRobinBatch(_) => {
+                    unimplemented!()
                 }
-
-                let mut partitioner = BatchPartitioner::try_new(partitioning, repart_time.clone())?;
-
-                let mut rows = 0;
-
-                while let Some(result) = stream.next().await {
-                    let input_batch = result?;
-                    rows += input_batch.num_rows();
-
+                Partitioning::UnknownPartitioning(_) => {
+                    // stream the results from the query, preserving the input partitioning
+                    let file =
+                        format!("/{shuffle_dir}/shuffle_{stage_id}_{input_partition}_0.arrow");
+                    debug!("Executing query and writing results to {file}");
+                    let stats = write_stream_to_disk(&mut stream, &file, &write_time).await?;
                     debug!(
-                        "ShuffleWriterExec[stage={}] writing batch:\n{}",
-                        stage_id,
-                        pretty_format_batches(&[input_batch.clone()])?
+                        "Query completed. Shuffle write time: {}. Rows: {}.",
+                        write_time, stats.num_rows
                     );
-
-                    //write_metrics.input_rows.add(input_batch.num_rows());
-
-                    partitioner.partition(input_batch, |output_partition, output_batch| {
-                        match &mut writers[output_partition] {
-                            Some(w) => {
-                                w.write(&output_batch)?;
-                            }
-                            None => {
-                                let path = format!(
-                                    "/{shuffle_dir}/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow",
-                                );
-                                let path = Path::new(&path);
-                                debug!("ShuffleWriterExec[stage={}] Writing results to {:?}", stage_id, path);
-
-                                let mut writer = IPCWriter::new(path, stream.schema().as_ref())?;
-
-                                writer.write(&output_batch)?;
-                                writers[output_partition] = Some(writer);
-                            }
-                        }
-                        Ok(())
-                    })?;
                 }
-
-                for (i, w) in writers.iter_mut().enumerate() {
-                    match w {
-                        Some(w) => {
-                            w.finish()?;
-                            debug!(
-                                    "ShuffleWriterExec[stage={}] Finished writing shuffle partition {} at {:?}. Batches: {}. Rows: {}. Bytes: {}.",
-                                    stage_id,
-                                    i,
-                                    w.path(),
-                                    w.num_batches,
-                                    w.num_rows,
-                                    w.num_bytes
-                                );
-                        }
-                        None => {}
+                Partitioning::Hash(_, _) => {
+                    // we won't necessary produce output for every possible partition, so we
+                    // create writers on demand
+                    let mut writers: Vec<Option<IPCWriter>> = vec![];
+                    for _ in 0..partition_count {
+                        writers.push(None);
                     }
+
+                    let mut partitioner =
+                        BatchPartitioner::try_new(partitioning, repart_time.clone())?;
+
+                    let mut rows = 0;
+
+                    while let Some(result) = stream.next().await {
+                        let input_batch = result?;
+                        rows += input_batch.num_rows();
+
+                        debug!(
+                            "ShuffleWriterExec[stage={}] writing batch:\n{}",
+                            stage_id,
+                            pretty_format_batches(&[input_batch.clone()])?
+                        );
+
+                        //write_metrics.input_rows.add(input_batch.num_rows());
+
+                        partitioner.partition(input_batch, |output_partition, output_batch| {
+                            match &mut writers[output_partition] {
+                                Some(w) => {
+                                    w.write(&output_batch)?;
+                                }
+                                None => {
+                                    let path = format!(
+                                        "/{shuffle_dir}/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow",
+                                    );
+                                    let path = Path::new(&path);
+                                    debug!("ShuffleWriterExec[stage={}] Writing results to {:?}", stage_id, path);
+
+                                    let mut writer = IPCWriter::new(path, stream.schema().as_ref())?;
+
+                                    writer.write(&output_batch)?;
+                                    writers[output_partition] = Some(writer);
+                                }
+                            }
+                            Ok(())
+                        })?;
+                    }
+
+                    for (i, w) in writers.iter_mut().enumerate() {
+                        match w {
+                            Some(w) => {
+                                w.finish()?;
+                                debug!(
+                                        "ShuffleWriterExec[stage={}] Finished writing shuffle partition {} at {:?}. Batches: {}. Rows: {}. Bytes: {}.",
+                                        stage_id,
+                                        i,
+                                        w.path(),
+                                        w.num_batches,
+                                        w.num_rows,
+                                        w.num_bytes
+                                    );
+                            }
+                            None => {}
+                        }
+                    }
+                    debug!(
+                        "ShuffleWriterExec[stage={}] Finished processing stream with {rows} rows",
+                        stage_id
+                    );
                 }
-                debug!(
-                    "ShuffleWriterExec[stage={}] Finished processing stream with {rows} rows",
-                    stage_id
-                );
             }
 
             // create a dummy batch to return - later this could be metadata about the

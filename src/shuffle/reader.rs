@@ -39,14 +39,17 @@ impl ShuffleReaderExec {
         partitioning: Partitioning,
         shuffle_dir: &str,
     ) -> Self {
-        // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
         let partitioning = match partitioning {
-            Partitioning::Hash(expr, n) => Partitioning::Hash(
-                expr.into_iter()
-                    .filter(|e| e.as_any().downcast_ref::<UnKnownColumn>().is_none())
-                    .collect(),
-                n,
-            ),
+            Partitioning::Hash(expr, n) if expr.is_empty() => Partitioning::UnknownPartitioning(n),
+            Partitioning::Hash(expr, n) => {
+                // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
+                Partitioning::Hash(
+                    expr.into_iter()
+                        .filter(|e| e.as_any().downcast_ref::<UnKnownColumn>().is_none())
+                        .collect(),
+                    n,
+                )
+            },
             _ => partitioning,
         };
 

@@ -369,7 +369,9 @@ mod test {
         for id in 0..=graph.get_final_query_stage().id {
             let query_stage = graph.query_stages.get(&id).unwrap();
             output.push_str(&format!(
-                "Query Stage #{id}:\n{}\n",
+                "Query Stage #{id} ({} -> {}):\n{}\n",
+                query_stage.get_input_partition_count(),
+                query_stage.get_output_partition_count(),
                 displayable(query_stage.plan.as_ref()).indent()
             ));
         }
