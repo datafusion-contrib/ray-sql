@@ -88,7 +88,7 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "l_orderk
           ShuffleReaderExec(stage_id=3, input_partitions=4)
 
 Query Stage #5:
-ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=5, output_partitioning=Hash([Column { name: "l_orderkey", index: 0 }, Column { name: "o_orderdate", index: 2 }, Column { name: "o_shippriority", index: 3 }], 4))
   SortExec: [revenue@1 DESC,o_orderdate@2 ASC NULLS LAST]
     ProjectionExec: expr=[l_orderkey@0 as l_orderkey, SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)@3 as revenue, o_orderdate@1 as o_orderdate, o_shippriority@2 as o_shippriority]
       AggregateExec: mode=FinalPartitioned, gby=[l_orderkey@0 as l_orderkey, o_orderdate@1 as o_orderdate, o_shippriority@2 as o_shippriority], aggr=[SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)]
@@ -98,5 +98,5 @@ ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
 Query Stage #6:
 GlobalLimitExec: skip=0, fetch=10
   SortPreservingMergeExec: [revenue@1 DESC,o_orderdate@2 ASC NULLS LAST]
-    ShuffleReaderExec(stage_id=5, input_partitions=1)
+    ShuffleReaderExec(stage_id=5, input_partitions=4)
 

@@ -140,10 +140,12 @@ fn generate_query_stages(
         .downcast_ref::<SortPreservingMergeExec>()
         .is_some()
     {
+        let partitioned_sort_plan = plan.children()[0].clone();
+        let partitioning_scheme = partitioned_sort_plan.output_partitioning();
         let new_input = create_shuffle_exchange(
-            plan.children()[0].clone(),
+            partitioned_sort_plan,
             graph,
-            Partitioning::UnknownPartitioning(1),
+            partitioning_scheme,
         )?;
         with_new_children_if_necessary(plan, vec![new_input])
     } else {

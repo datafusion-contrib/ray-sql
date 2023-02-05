@@ -102,7 +102,7 @@ ShuffleWriterExec(stage_id=5, output_partitioning=Hash([Column { name: "c_name",
                   ShuffleReaderExec(stage_id=4, input_partitions=4)
 
 Query Stage #6:
-ShuffleWriterExec(stage_id=6, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=6, output_partitioning=Hash([Column { name: "c_name", index: 0 }, Column { name: "c_custkey", index: 1 }, Column { name: "o_orderkey", index: 2 }, Column { name: "o_orderdate", index: 3 }, Column { name: "o_totalprice", index: 4 }], 4))
   SortExec: [o_totalprice@4 DESC,o_orderdate@3 ASC NULLS LAST]
     ProjectionExec: expr=[c_name@0 as c_name, c_custkey@1 as c_custkey, o_orderkey@2 as o_orderkey, o_orderdate@3 as o_orderdate, o_totalprice@4 as o_totalprice, SUM(lineitem.l_quantity)@5 as SUM(lineitem.l_quantity)]
       AggregateExec: mode=FinalPartitioned, gby=[c_name@0 as c_name, c_custkey@1 as c_custkey, o_orderkey@2 as o_orderkey, o_orderdate@3 as o_orderdate, o_totalprice@4 as o_totalprice], aggr=[SUM(lineitem.l_quantity)]
@@ -112,5 +112,5 @@ ShuffleWriterExec(stage_id=6, output_partitioning=UnknownPartitioning(1))
 Query Stage #7:
 GlobalLimitExec: skip=0, fetch=100
   SortPreservingMergeExec: [o_totalprice@4 DESC,o_orderdate@3 ASC NULLS LAST]
-    ShuffleReaderExec(stage_id=6, input_partitions=1)
+    ShuffleReaderExec(stage_id=6, input_partitions=4)
 

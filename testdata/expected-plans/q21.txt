@@ -156,7 +156,7 @@ ShuffleWriterExec(stage_id=9, output_partitioning=Hash([Column { name: "s_name",
           ShuffleReaderExec(stage_id=8, input_partitions=4)
 
 Query Stage #10:
-ShuffleWriterExec(stage_id=10, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "s_name", index: 0 }], 4))
   SortExec: [numwait@1 DESC,s_name@0 ASC NULLS LAST]
     ProjectionExec: expr=[s_name@0 as s_name, COUNT(UInt8(1))@1 as numwait]
       AggregateExec: mode=FinalPartitioned, gby=[s_name@0 as s_name], aggr=[COUNT(UInt8(1))]
@@ -166,5 +166,5 @@ ShuffleWriterExec(stage_id=10, output_partitioning=UnknownPartitioning(1))
 Query Stage #11:
 GlobalLimitExec: skip=0, fetch=100
   SortPreservingMergeExec: [numwait@1 DESC,s_name@0 ASC NULLS LAST]
-    ShuffleReaderExec(stage_id=10, input_partitions=1)
+    ShuffleReaderExec(stage_id=10, input_partitions=4)
 
