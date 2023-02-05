@@ -148,7 +148,7 @@ ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "n_name"
           ShuffleReaderExec(stage_id=9, input_partitioning=Hash([Column { name: "r_regionkey", index: 0 }], 4))
 
 Query Stage #11:
-ShuffleWriterExec(stage_id=11, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=11, output_partitioning=Hash([Column { name: "n_name", index: 0 }], 4))
   ProjectionExec: expr=[n_name@0 as n_name, SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)@1 as revenue]
     AggregateExec: mode=FinalPartitioned, gby=[n_name@0 as n_name], aggr=[SUM(lineitem.l_extendedprice * Int64(1) - lineitem.l_discount)]
       CoalesceBatchesExec: target_batch_size=8192
@@ -156,5 +156,6 @@ ShuffleWriterExec(stage_id=11, output_partitioning=UnknownPartitioning(1))
 
 Query Stage #12:
 SortExec: [revenue@1 DESC]
-  ShuffleReaderExec(stage_id=11, input_partitioning=UnknownPartitioning(1))
+  CoalescePartitionsExec
+    ShuffleReaderExec(stage_id=11, input_partitioning=Hash([Column { name: "n_name", index: 0 }], 4))
 

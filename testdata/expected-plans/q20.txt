@@ -138,7 +138,7 @@ ShuffleWriterExec(stage_id=7, output_partitioning=Hash([Column { name: "ps_suppk
                   ShuffleReaderExec(stage_id=6, input_partitioning=Hash([Column { name: "l_partkey", index: 0 }, Column { name: "l_suppkey", index: 1 }], 4))
 
 Query Stage #8:
-ShuffleWriterExec(stage_id=8, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=8, output_partitioning=Hash([], 4))
   ProjectionExec: expr=[s_name@1 as s_name, s_address@2 as s_address]
     CoalesceBatchesExec: target_batch_size=8192
       HashJoinExec: mode=Partitioned, join_type=LeftSemi, on=[(Column { name: "s_suppkey", index: 0 }, Column { name: "ps_suppkey", index: 0 })]
@@ -149,5 +149,6 @@ ShuffleWriterExec(stage_id=8, output_partitioning=UnknownPartitioning(1))
 
 Query Stage #9:
 SortExec: [s_name@0 ASC NULLS LAST]
-  ShuffleReaderExec(stage_id=8, input_partitioning=UnknownPartitioning(1))
+  CoalescePartitionsExec
+    ShuffleReaderExec(stage_id=8, input_partitioning=Hash([], 4))
 

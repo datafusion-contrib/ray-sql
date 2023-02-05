@@ -66,7 +66,7 @@ ShuffleWriterExec(stage_id=2, output_partitioning=Hash([Column { name: "c_count"
                   ShuffleReaderExec(stage_id=1, input_partitioning=Hash([Column { name: "o_custkey", index: 1 }], 4))
 
 Query Stage #3:
-ShuffleWriterExec(stage_id=3, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=3, output_partitioning=Hash([Column { name: "c_count", index: 0 }], 4))
   ProjectionExec: expr=[c_count@0 as c_count, COUNT(UInt8(1))@1 as custdist]
     AggregateExec: mode=FinalPartitioned, gby=[c_count@0 as c_count], aggr=[COUNT(UInt8(1))]
       CoalesceBatchesExec: target_batch_size=8192
@@ -74,5 +74,6 @@ ShuffleWriterExec(stage_id=3, output_partitioning=UnknownPartitioning(1))
 
 Query Stage #4:
 SortExec: [custdist@1 DESC,c_count@0 DESC]
-  ShuffleReaderExec(stage_id=3, input_partitioning=UnknownPartitioning(1))
+  CoalescePartitionsExec
+    ShuffleReaderExec(stage_id=3, input_partitioning=Hash([Column { name: "c_count", index: 0 }], 4))
 

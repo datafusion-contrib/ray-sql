@@ -109,7 +109,10 @@ impl ExecutionPlan for ShuffleWriterExec {
         input_partition: usize,
         context: Arc<TaskContext>,
     ) -> Result<SendableRecordBatchStream> {
-        debug!("ShuffleWriteExec::execute(input_partition={input_partition})");
+        debug!(
+            "ShuffleWriterExec[stage={}].execute(input_partition={input_partition})",
+            self.stage_id
+        );
 
         let mut stream = self.plan.execute(input_partition, context)?;
         let write_time =
@@ -149,7 +152,8 @@ impl ExecutionPlan for ShuffleWriterExec {
                     rows += input_batch.num_rows();
 
                     debug!(
-                        "ShuffleWriterExec writing batch:\n{}",
+                        "ShuffleWriterExec[stage={}] writing batch:\n{}",
+                        stage_id,
                         pretty_format_batches(&[input_batch.clone()])?
                     );
 
@@ -165,7 +169,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                                     "/{shuffle_dir}/shuffle_{stage_id}_{input_partition}_{output_partition}.arrow",
                                 );
                                 let path = Path::new(&path);
-                                debug!("Writing results to {:?}", path);
+                                debug!("ShuffleWriterExec[stage={}] Writing results to {:?}", stage_id, path);
 
                                 let mut writer = IPCWriter::new(path, stream.schema().as_ref())?;
 
@@ -182,7 +186,8 @@ impl ExecutionPlan for ShuffleWriterExec {
                         Some(w) => {
                             w.finish()?;
                             debug!(
-                                    "Finished writing shuffle partition {} at {:?}. Batches: {}. Rows: {}. Bytes: {}.",
+                                    "ShuffleWriterExec[stage={}] Finished writing shuffle partition {} at {:?}. Batches: {}. Rows: {}. Bytes: {}.",
+                                    stage_id,
                                     i,
                                     w.path(),
                                     w.num_batches,
@@ -193,8 +198,10 @@ impl ExecutionPlan for ShuffleWriterExec {
                         None => {}
                     }
                 }
-
-                debug!("finished processing stream with {rows} rows");
+                debug!(
+                    "ShuffleWriterExec[stage={}] Finished processing stream with {rows} rows",
+                    stage_id
+                );
             }
 
             // create a dummy batch to return - later this could be metadata about the

@@ -206,7 +206,7 @@ ShuffleWriterExec(stage_id=14, output_partitioning=Hash([Column { name: "o_year"
               ShuffleReaderExec(stage_id=13, input_partitioning=Hash([Column { name: "r_regionkey", index: 0 }], 4))
 
 Query Stage #15:
-ShuffleWriterExec(stage_id=15, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=15, output_partitioning=Hash([Column { name: "o_year", index: 0 }], 4))
   ProjectionExec: expr=[o_year@0 as o_year, SUM(CASE WHEN all_nations.nation = Utf8("IRAQ") THEN all_nations.volume ELSE Int64(0) END)@1 / SUM(all_nations.volume)@2 as mkt_share]
     AggregateExec: mode=FinalPartitioned, gby=[o_year@0 as o_year], aggr=[SUM(CASE WHEN all_nations.nation = Utf8("IRAQ") THEN all_nations.volume ELSE Int64(0) END), SUM(all_nations.volume)]
       CoalesceBatchesExec: target_batch_size=8192
@@ -214,5 +214,6 @@ ShuffleWriterExec(stage_id=15, output_partitioning=UnknownPartitioning(1))
 
 Query Stage #16:
 SortExec: [o_year@0 ASC NULLS LAST]
-  ShuffleReaderExec(stage_id=15, input_partitioning=UnknownPartitioning(1))
+  CoalescePartitionsExec
+    ShuffleReaderExec(stage_id=15, input_partitioning=Hash([Column { name: "o_year", index: 0 }], 4))
 

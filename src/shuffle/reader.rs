@@ -100,7 +100,12 @@ impl ExecutionPlan for ShuffleReaderExec {
         let mut streams: Vec<SendableRecordBatchStream> = vec![];
         for entry in glob(&pattern).expect("Failed to read glob pattern") {
             let file = entry.unwrap();
-            debug!("Shuffle reader reading from {}", file.display());
+            debug!(
+                "ShuffleReaderExec partition {} reading from stage {} file {}",
+                partition,
+                self.stage_id,
+                file.display()
+            );
             let reader = FileReader::try_new(File::open(&file)?, None)?;
             let stream = LocalShuffleStream::new(reader);
             if self.schema != stream.schema() {

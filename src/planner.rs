@@ -5,7 +5,7 @@ use datafusion::error::Result;
 use datafusion::physical_plan::coalesce_partitions::CoalescePartitionsExec;
 use datafusion::physical_plan::repartition::RepartitionExec;
 use datafusion::physical_plan::sorts::sort_preserving_merge::SortPreservingMergeExec;
-use datafusion::physical_plan::Partitioning;
+use datafusion::physical_plan::{displayable, Partitioning};
 use datafusion::physical_plan::{with_new_children_if_necessary, ExecutionPlan};
 use log::debug;
 use pyo3::prelude::*;
@@ -117,7 +117,10 @@ fn generate_query_stages(
         .collect::<Result<Vec<_>>>()?;
     let plan = with_new_children_if_necessary(plan, new_children)?;
 
-    if let Some(repart) = plan.as_any().downcast_ref::<RepartitionExec>() {
+    debug!("plan = {}", displayable(plan.as_ref()).one_line());
+    debug!("output_part = {:?}", plan.output_partitioning());
+
+    let new_plan = if let Some(repart) = plan.as_any().downcast_ref::<RepartitionExec>() {
         match repart.partitioning() {
             &Partitioning::UnknownPartitioning(_) | &Partitioning::RoundRobinBatch(_) => {
                 // just remove these
@@ -134,11 +137,10 @@ fn generate_query_stages(
         .downcast_ref::<CoalescePartitionsExec>()
         .is_some()
     {
-        create_shuffle_exchange(
-            plan.children()[0].clone(),
-            graph,
-            Partitioning::UnknownPartitioning(1),
-        )
+        let coalesce_input = plan.children()[0].clone();
+        let partitioning_scheme = coalesce_input.output_partitioning();
+        let new_input = create_shuffle_exchange(coalesce_input, graph, partitioning_scheme)?;
+        with_new_children_if_necessary(plan, vec![new_input])
     } else if plan
         .as_any()
         .downcast_ref::<SortPreservingMergeExec>()
@@ -150,7 +152,15 @@ fn generate_query_stages(
         with_new_children_if_necessary(plan, vec![new_input])
     } else {
         Ok(plan)
-    }
+    }?;
+
+    debug!("new_plan = {}", displayable(new_plan.as_ref()).one_line());
+    debug!(
+        "new_output_part = {:?}\n\n-------------------------\n\n",
+        new_plan.output_partitioning()
+    );
+
+    Ok(new_plan)
 }
 
 /// Create a shuffle exchange.
@@ -175,6 +185,12 @@ fn create_shuffle_exchange(
         partitioning_scheme.clone(),
         &temp_dir,
     );
+
+    debug!(
+        "Created shuffle writer with output partitioning {:?}",
+        shuffle_writer.output_partitioning()
+    );
+
     let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
     // replace the plan with a shuffle reader
     Ok(Arc::new(ShuffleReaderExec::new(

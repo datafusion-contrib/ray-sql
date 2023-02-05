@@ -81,7 +81,7 @@ ShuffleWriterExec(stage_id=4, output_partitioning=Hash([Column { name: "l_partke
         ShuffleReaderExec(stage_id=3, input_partitioning=Hash([Column { name: "l_partkey", index: 0 }], 4))
 
 Query Stage #5:
-ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=5, output_partitioning=Hash([], 4))
   AggregateExec: mode=Partial, gby=[], aggr=[SUM(lineitem.l_extendedprice)]
     CoalesceBatchesExec: target_batch_size=8192
       FilterExec: CAST(l_quantity@1 AS Decimal128(30, 15)) < CAST(__value@7 AS Decimal128(30, 15))
@@ -95,5 +95,6 @@ ShuffleWriterExec(stage_id=5, output_partitioning=UnknownPartitioning(1))
 Query Stage #6:
 ProjectionExec: expr=[CAST(SUM(lineitem.l_extendedprice)@0 AS Float64) / 7 as avg_yearly]
   AggregateExec: mode=Final, gby=[], aggr=[SUM(lineitem.l_extendedprice)]
-    ShuffleReaderExec(stage_id=5, input_partitioning=UnknownPartitioning(1))
+    CoalescePartitionsExec
+      ShuffleReaderExec(stage_id=5, input_partitioning=Hash([], 4))
 

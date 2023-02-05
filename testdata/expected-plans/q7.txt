@@ -165,7 +165,7 @@ ShuffleWriterExec(stage_id=10, output_partitioning=Hash([Column { name: "supp_na
                 ShuffleReaderExec(stage_id=9, input_partitioning=Hash([Column { name: "n_nationkey", index: 0 }], 4))
 
 Query Stage #11:
-ShuffleWriterExec(stage_id=11, output_partitioning=UnknownPartitioning(1))
+ShuffleWriterExec(stage_id=11, output_partitioning=Hash([Column { name: "supp_nation", index: 0 }, Column { name: "cust_nation", index: 1 }, Column { name: "l_year", index: 2 }], 4))
   ProjectionExec: expr=[supp_nation@0 as supp_nation, cust_nation@1 as cust_nation, l_year@2 as l_year, SUM(shipping.volume)@3 as revenue]
     AggregateExec: mode=FinalPartitioned, gby=[supp_nation@0 as supp_nation, cust_nation@1 as cust_nation, l_year@2 as l_year], aggr=[SUM(shipping.volume)]
       CoalesceBatchesExec: target_batch_size=8192
@@ -173,5 +173,6 @@ ShuffleWriterExec(stage_id=11, output_partitioning=UnknownPartitioning(1))
 
 Query Stage #12:
 SortExec: [supp_nation@0 ASC NULLS LAST,cust_nation@1 ASC NULLS LAST,l_year@2 ASC NULLS LAST]
-  ShuffleReaderExec(stage_id=11, input_partitioning=UnknownPartitioning(1))
+  CoalescePartitionsExec
+    ShuffleReaderExec(stage_id=11, input_partitioning=Hash([Column { name: "supp_nation", index: 0 }, Column { name: "cust_nation", index: 1 }, Column { name: "l_year", index: 2 }], 4))
 
