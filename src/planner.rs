@@ -134,7 +134,7 @@ fn generate_query_stages(
         .downcast_ref::<CoalescePartitionsExec>()
         .is_some()
     {
-        create_shuffle_exchange(plan.clone(), graph, Partitioning::UnknownPartitioning(1))
+        create_shuffle_exchange(plan.children()[0].clone(), graph, Partitioning::UnknownPartitioning(1))
     } else if plan
         .as_any()
         .downcast_ref::<SortPreservingMergeExec>()
