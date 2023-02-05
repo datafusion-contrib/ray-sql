@@ -5,7 +5,7 @@ from raysql import Context, deserialize_execution_plan
 class Worker:
     def __init__(self):
         self.ctx = Context(1)
-        self.debug = True
+        self.debug = False
 
     def execute_query_partition(self, plan_bytes, part):
         plan = deserialize_execution_plan(plan_bytes)

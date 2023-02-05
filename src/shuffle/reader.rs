@@ -4,6 +4,7 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::TaskContext;
+use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::union::CombinedRecordBatchStream;
 use datafusion::physical_plan::{
@@ -18,7 +19,6 @@ use std::fs::File;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use datafusion::physical_expr::expressions::UnKnownColumn;
 
 #[derive(Debug)]
 pub struct ShuffleReaderExec {
@@ -39,7 +39,6 @@ impl ShuffleReaderExec {
         partitioning: Partitioning,
         shuffle_dir: &str,
     ) -> Self {
-
         // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
         let partitioning = match partitioning {
             Partitioning::Hash(expr, n) => Partitioning::Hash(
@@ -50,7 +49,6 @@ impl ShuffleReaderExec {
             ),
             _ => partitioning,
         };
-
 
         Self {
             stage_id,
@@ -122,8 +120,7 @@ impl ExecutionPlan for ShuffleReaderExec {
         write!(
             f,
             "ShuffleReaderExec(stage_id={}, input_partitioning={:?})",
-            self.stage_id,
-            self.partitioning
+            self.stage_id, self.partitioning
         )
     }
 

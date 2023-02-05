@@ -15,12 +15,11 @@ def execute_query_stage(query_stages, stage_id, workers):
 
     # if the query stage has a single output partition then we need to execute for the output
     # partition, otherwise we need to execute in parallel for each input partition
-    if stage.get_output_partition_count == 1:
-        partition_count = 1
-    else:
+    partition_count = 1
+    if stage.get_output_partition_count() > 1:
         partition_count = stage.get_input_partition_count()
 
-    print("Scheduling query stage #{} with {} input partitions and {} output partitions".format(stage.id(), partition_count, stage.get_output_partition_count()))
+    print("Scheduling query stage #{} with {} input partitions and {} output partitions".format(stage.id(), stage.get_input_partition_count(), stage.get_output_partition_count()))
 
     plan_bytes = ray.put(serialize_execution_plan(stage.get_execution_plan()))
 
