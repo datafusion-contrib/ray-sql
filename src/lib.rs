@@ -3,14 +3,14 @@ extern crate core;
 use pyo3::prelude::*;
 
 mod proto;
+use crate::context::{deserialize_execution_plan, serialize_execution_plan};
 pub use proto::generated::protobuf;
-use crate::context::{serialize_execution_plan, deserialize_execution_plan};
 
 pub mod context;
 pub mod planner;
+pub mod query_stage;
 pub mod shuffle;
 pub mod utils;
-pub mod query_stage;
 
 /// A Python module implemented in Rust.
 #[pymodule]

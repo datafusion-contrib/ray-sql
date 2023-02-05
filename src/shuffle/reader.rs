@@ -4,6 +4,7 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::TaskContext;
+use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::union::CombinedRecordBatchStream;
 use datafusion::physical_plan::{
@@ -38,6 +39,20 @@ impl ShuffleReaderExec {
         partitioning: Partitioning,
         shuffle_dir: &str,
     ) -> Self {
+        let partitioning = match partitioning {
+            Partitioning::Hash(expr, n) if expr.is_empty() => Partitioning::UnknownPartitioning(n),
+            Partitioning::Hash(expr, n) => {
+                // workaround for DataFusion bug https://github.com/apache/arrow-datafusion/issues/5184
+                Partitioning::Hash(
+                    expr.into_iter()
+                        .filter(|e| e.as_any().downcast_ref::<UnKnownColumn>().is_none())
+                        .collect(),
+                    n,
+                )
+            },
+            _ => partitioning,
+        };
+
         Self {
             stage_id,
             schema,
@@ -88,7 +103,12 @@ impl ExecutionPlan for ShuffleReaderExec {
         let mut streams: Vec<SendableRecordBatchStream> = vec![];
         for entry in glob(&pattern).expect("Failed to read glob pattern") {
             let file = entry.unwrap();
-            debug!("Shuffle reader reading from {}", file.display());
+            debug!(
+                "ShuffleReaderExec partition {} reading from stage {} file {}",
+                partition,
+                self.stage_id,
+                file.display()
+            );
             let reader = FileReader::try_new(File::open(&file)?, None)?;
             let stream = LocalShuffleStream::new(reader);
             if self.schema != stream.schema() {
@@ -107,9 +127,8 @@ impl ExecutionPlan for ShuffleReaderExec {
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "ShuffleReaderExec(stage_id={}, input_partitions={})",
-            self.stage_id,
-            self.partitioning.partition_count()
+            "ShuffleReaderExec(stage_id={}, input_partitioning={:?})",
+            self.stage_id, self.partitioning
         )
     }
 

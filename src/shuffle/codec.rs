@@ -109,9 +109,9 @@ fn encode_partitioning_scheme(partitioning: &Partitioning) -> Result<PhysicalHas
                 .collect::<Result<Vec<_>, DataFusionError>>()?,
             partition_count: *partition_count as u64,
         }),
-        Partitioning::UnknownPartitioning(1) => Ok(protobuf::PhysicalHashRepartition {
+        Partitioning::UnknownPartitioning(n) => Ok(protobuf::PhysicalHashRepartition {
             hash_expr: vec![],
-            partition_count: 1,
+            partition_count: *n as u64,
         }),
         other => Err(DataFusionError::Plan(format!(
             "Unsupported shuffle partitioning scheme: {other:?}"

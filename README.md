@@ -5,13 +5,14 @@ This is a personal research project to evaluate performing distributed SQL queri
 
 ## Goals
 
-- Demonstrate how easily new systems can be built on top of DataFusion
-- Drive requirements for DataFusion's Python bindings
-- Create content for an interesting blog post or conference talk
+- Demonstrate how easily new systems can be built on top of DataFusion. See the [design documentation](./docs/README.md)
+  to understand how RaySQL works.
+- Drive requirements for DataFusion's [Python bindings](https://github.com/apache/arrow-datafusion-python).
+- Create content for an interesting blog post or conference talk.
 
 ## Non Goals
 
-- Build and support a production system
+- Build and support a production system.
 
 ## Example
 
@@ -28,10 +29,14 @@ ray.init()
 # create some remote Workers
 workers = [Worker.remote() for i in range(2)]
 
-# create context and plan a query
-ctx = RaySqlContext(workers)
-ctx.register_csv('tips', 'tips.csv', True)
-result_set = ctx.sql('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker')
+# create a remote context and register a table
+ctx = RaySqlContext.remote(workers)
+ray.get(ctx.register_csv.remote('tips', 'tips.csv', True))
+
+# Parquet is also supported
+# ctx.register_parquet('tips', 'tips.parquet')
+
+result_set = ray.get(ctx.sql.remote('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker'))
 print(result_set)
 ```
 
@@ -58,7 +63,7 @@ Note that query 15 is excluded from both results since RaySQL does not support D
 
 ### Overall Time
 
-RaySQL is ~30% faster overall for this scale factor and environment.
+RaySQL is ~65% faster overall for this scale factor and environment.
 
 ![SQLBench-H Total](./docs/sqlbench-h-total.png)
 

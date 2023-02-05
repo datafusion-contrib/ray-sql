@@ -1,11 +1,11 @@
 use crate::shuffle::{ShuffleCodec, ShuffleReaderExec};
+use datafusion::error::Result;
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion::prelude::SessionContext;
+use datafusion_proto::bytes::physical_plan_from_bytes_with_extension_codec;
 use datafusion_python::physical_plan::PyExecutionPlan;
 use pyo3::prelude::*;
 use std::sync::Arc;
-use datafusion::prelude::SessionContext;
-use datafusion::error::Result;
-use datafusion_proto::bytes::physical_plan_from_bytes_with_extension_codec;
 
 #[pyclass(name = "QueryStage", module = "raysql", subclass)]
 pub struct PyQueryStage {
@@ -26,10 +26,7 @@ impl PyQueryStage {
         let codec = ShuffleCodec {};
         let plan = physical_plan_from_bytes_with_extension_codec(&bytes, &ctx, &codec)?;
         Ok(PyQueryStage {
-            stage: Arc::new(QueryStage {
-                id,
-                plan
-            })
+            stage: Arc::new(QueryStage { id, plan }),
         })
     }
 
@@ -74,7 +71,11 @@ impl QueryStage {
     /// Get the input partition count. This is the same as the number of concurrent tasks
     /// when we schedule this query stage for execution
     pub fn get_input_partition_count(&self) -> usize {
-        collect_input_partition_count(self.plan.as_ref())
+        self.plan.children()[0].output_partitioning().partition_count()
+    }
+
+    pub fn get_output_partition_count(&self) -> usize {
+        self.plan.output_partitioning().partition_count()
     }
 }
 
@@ -85,15 +86,5 @@ fn collect_child_stage_ids(plan: &dyn ExecutionPlan, ids: &mut Vec<usize>) {
         for child_plan in plan.children() {
             collect_child_stage_ids(child_plan.as_ref(), ids);
         }
-    }
-}
-
-fn collect_input_partition_count(plan: &dyn ExecutionPlan) -> usize {
-    if plan.children().is_empty() {
-        plan.output_partitioning().partition_count()
-    } else {
-        // invariants:
-        // - all inputs must have the same partition count
-        collect_input_partition_count(plan.children()[0].as_ref())
     }
 }

@@ -5,6 +5,8 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::error::Result;
 use datafusion::execution::context::TaskContext;
+use datafusion::execution::disk_manager::DiskManagerConfig;
+use datafusion::execution::memory_pool::FairSpillPool;
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::physical_plan::displayable;
 use datafusion::prelude::*;
@@ -28,17 +30,22 @@ pub struct PyContext {
 #[pymethods]
 impl PyContext {
     #[new]
-    pub fn new(target_partitions: usize) -> Self {
+    pub fn new(target_partitions: usize) -> Result<Self> {
         let config = SessionConfig::default()
             .with_target_partitions(target_partitions)
-            .with_batch_size(16*1024)
+            .with_batch_size(16 * 1024)
             .with_repartition_aggregations(true)
             .with_repartition_windows(true)
             .with_repartition_joins(true)
             .with_parquet_pruning(true);
-        Self {
-            ctx: SessionContext::with_config(config),
-        }
+
+        let mem_pool_size = 1024 * 1024 * 1024;
+        let runtime_config = datafusion::execution::runtime_env::RuntimeConfig::new()
+            .with_memory_pool(Arc::new(FairSpillPool::new(mem_pool_size)))
+            .with_disk_manager(DiskManagerConfig::new_specified(vec!["/tmp".into()]));
+        let runtime = Arc::new(RuntimeEnv::new(runtime_config)?);
+        let ctx = SessionContext::with_config_rt(config, runtime);
+        Ok(Self { ctx })
     }
 
     pub fn register_csv(
@@ -77,7 +84,6 @@ impl PyContext {
 
         Ok(PyExecutionGraph::new(graph))
     }
-
 
     /// Execute a partition of a query plan. This will typically be executing a shuffle write and write the results to disk
     pub fn execute_partition(&self, plan: PyExecutionPlan, part: usize) -> PyResultSet {
