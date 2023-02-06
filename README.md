@@ -1,6 +1,6 @@
 # RaySQL: DataFusion on Ray
 
-This is a personal research project to evaluate performing distributed SQL queries from Python, using
+This is a research project to evaluate performing distributed SQL queries from Python, using
 [Ray](https://www.ray.io/) and [DataFusion](https://github.com/apache/arrow-datafusion).
 
 ## Goals
