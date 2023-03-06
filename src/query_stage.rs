@@ -1,4 +1,4 @@
-use crate::shuffle::{ShuffleCodec, ShuffleReaderExec};
+use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec, ShuffleReaderExec};
 use datafusion::error::Result;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::prelude::SessionContext;
@@ -71,7 +71,9 @@ impl QueryStage {
     /// Get the input partition count. This is the same as the number of concurrent tasks
     /// when we schedule this query stage for execution
     pub fn get_input_partition_count(&self) -> usize {
-        self.plan.children()[0].output_partitioning().partition_count()
+        self.plan.children()[0]
+            .output_partitioning()
+            .partition_count()
     }
 
     pub fn get_output_partition_count(&self) -> usize {
@@ -81,6 +83,8 @@ impl QueryStage {
 
 fn collect_child_stage_ids(plan: &dyn ExecutionPlan, ids: &mut Vec<usize>) {
     if let Some(shuffle_reader) = plan.as_any().downcast_ref::<ShuffleReaderExec>() {
+        ids.push(shuffle_reader.stage_id);
+    } else if let Some(shuffle_reader) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
         ids.push(shuffle_reader.stage_id);
     } else {
         for child_plan in plan.children() {

@@ -1,6 +1,8 @@
 use crate::planner::{make_execution_graph, PyExecutionGraph};
 use crate::shuffle::ShuffleCodec;
 use crate::utils::wait_for_future;
+use datafusion::arrow::ipc::reader::StreamReader;
+use datafusion::arrow::ipc::writer::StreamWriter;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::error::Result;
@@ -15,8 +17,8 @@ use datafusion_proto::bytes::{
 };
 use datafusion_python::physical_plan::PyExecutionPlan;
 use futures::StreamExt;
-use log::debug;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -25,12 +27,13 @@ use tokio::task::JoinHandle;
 #[pyclass(name = "Context", module = "raysql", subclass)]
 pub struct PyContext {
     pub(crate) ctx: SessionContext,
+    use_ray_shuffle: bool,
 }
 
 #[pymethods]
 impl PyContext {
     #[new]
-    pub fn new(target_partitions: usize) -> Result<Self> {
+    pub fn new(target_partitions: usize, use_ray_shuffle: bool) -> Result<Self> {
         let config = SessionConfig::default()
             .with_target_partitions(target_partitions)
             .with_batch_size(16 * 1024)
@@ -45,7 +48,10 @@ impl PyContext {
             .with_disk_manager(DiskManagerConfig::new_specified(vec!["/tmp".into()]));
         let runtime = Arc::new(RuntimeEnv::new(runtime_config)?);
         let ctx = SessionContext::with_config_rt(config, runtime);
-        Ok(Self { ctx })
+        Ok(Self {
+            ctx,
+            use_ray_shuffle,
+        })
     }
 
     pub fn register_csv(
@@ -67,15 +73,15 @@ impl PyContext {
     }
 
     pub fn plan(&self, sql: &str, py: Python) -> PyResult<PyExecutionGraph> {
-        debug!("Planning {}", sql);
+        println!("Planning {}", sql);
         let df = wait_for_future(py, self.ctx.sql(sql))?;
         let plan = wait_for_future(py, df.create_physical_plan())?;
 
-        let graph = make_execution_graph(plan.clone())?;
+        let graph = make_execution_graph(plan.clone(), self.use_ray_shuffle)?;
 
         // debug logging
         for stage in graph.query_stages.values() {
-            debug!(
+            println!(
                 "Query stage #{}:\n{}",
                 stage.id,
                 displayable(stage.plan.as_ref()).indent()
@@ -91,7 +97,7 @@ impl PyContext {
             ._execute_partition(plan, part)
             .unwrap()
             .iter()
-            .map(|batch| PyRecordBatch::new(batch.clone()))
+            .map(|batch| batch.clone()) // TODO(@lsf): avoid clone
             .collect();
         PyResultSet::new(batches)
     }
@@ -145,37 +151,39 @@ impl PyContext {
 
 #[pyclass(name = "ResultSet", module = "raysql", subclass)]
 pub struct PyResultSet {
-    batches: Vec<PyRecordBatch>,
+    batches: Vec<RecordBatch>,
 }
 
 impl PyResultSet {
-    fn new(batches: Vec<PyRecordBatch>) -> Self {
+    fn new(batches: Vec<RecordBatch>) -> Self {
         Self { batches }
     }
 }
 
 #[pymethods]
 impl PyResultSet {
-    fn __repr__(&self) -> PyResult<String> {
-        let batches: Vec<RecordBatch> = self.batches.iter().map(|b| b.batch.clone()).collect();
-        Ok(format!("{}", pretty_format_batches(&batches).unwrap()))
-    }
-}
-
-#[pyclass(name = "RecordBatch", module = "raysql", subclass)]
-pub struct PyRecordBatch {
-    pub(crate) batch: RecordBatch,
-}
-
-impl PyRecordBatch {
-    fn new(batch: RecordBatch) -> Self {
-        Self { batch }
+    #[new]
+    fn py_new(py_bytes: &PyBytes) -> PyResult<Self> {
+        let reader = StreamReader::try_new(py_bytes.as_bytes(), None).unwrap();
+        let batches = reader.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>();
+        Ok(Self { batches })
     }
 
     fn __repr__(&self) -> PyResult<String> {
-        Ok(format!(
-            "{}",
-            pretty_format_batches(&[self.batch.clone()]).unwrap()
-        ))
+        Ok(format!("{}", pretty_format_batches(&self.batches).unwrap()))
+    }
+
+    fn tobytes(&self, py: Python) -> PyResult<PyObject> {
+        // TODO(@lsf): wrap errors into PyErr
+        let mut buf = Vec::<u8>::new();
+        if !self.batches.is_empty() {
+            let mut writer =
+                StreamWriter::try_new(&mut buf, self.batches[0].schema().as_ref()).unwrap();
+            for batch in &self.batches {
+                writer.write(batch).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        Ok(PyBytes::new(py, &buf).into())
     }
 }
