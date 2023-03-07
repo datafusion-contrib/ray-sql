@@ -1,8 +1,7 @@
 use datafusion::arrow::datatypes::SchemaRef;
-use datafusion::arrow::ipc::reader::FileReader;
+use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
-use datafusion::error::DataFusionError;
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
@@ -11,12 +10,11 @@ use datafusion::physical_plan::{
     DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream, SendableRecordBatchStream,
 };
 use futures::Stream;
-use glob::glob;
 use std::any::Any;
 use std::fmt::Formatter;
-use std::fs::File;
+use std::io::Cursor;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 
 #[derive(Debug)]
@@ -28,7 +26,9 @@ pub struct RayShuffleReaderExec {
     /// Output partitioning
     partitioning: Partitioning,
     /// Directory to read shuffle files from
-    pub shuffle_dir: String,
+    pub shuffle_dir: String, // TODO(@lsf) remove
+    /// Input streams from Ray object store
+    input_objects: RwLock<Vec<Vec<u8>>>, // TODO(@lsf) can we not use Rwlock?
 }
 
 impl RayShuffleReaderExec {
@@ -57,7 +57,16 @@ impl RayShuffleReaderExec {
             schema,
             partitioning,
             shuffle_dir: shuffle_dir.to_string(),
+            input_objects: RwLock::new(vec![]),
         }
+    }
+
+    pub fn set_input_objects(&self, input_objects: Vec<Vec<u8>>) {
+        println!("set_input_objects: {:?}", input_objects.len());
+        input_objects
+            .iter()
+            .for_each(|x| println!("set_input_objects: {:?}", x.len()));
+        *self.input_objects.write().unwrap() = input_objects;
     }
 }
 
@@ -92,34 +101,19 @@ impl ExecutionPlan for RayShuffleReaderExec {
 
     fn execute(
         &self,
-        partition: usize,
+        _partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let pattern = format!(
-            "/{}/shuffle_{}_*_{partition}.arrow",
-            self.shuffle_dir, self.stage_id
-        );
-        let mut streams: Vec<SendableRecordBatchStream> = vec![];
-        for entry in glob(&pattern).expect("Failed to read glob pattern") {
-            let file = entry.unwrap();
-            println!(
-                "RayShuffleReaderExec partition {} reading from stage {} file {}",
-                partition,
-                self.stage_id,
-                file.display()
-            );
-            let reader = FileReader::try_new(File::open(&file)?, None)?;
-            let stream = LocalShuffleStream::new(reader);
-            if self.schema != stream.schema() {
-                return Err(DataFusionError::Internal(
-                    "Not all shuffle files have the same schema".to_string(),
-                ));
-            }
-            streams.push(Box::pin(stream));
-        }
         Ok(Box::pin(CombinedRecordBatchStream::new(
             self.schema.clone(),
-            streams,
+            self.input_objects
+                .read()
+                .unwrap()
+                .iter()
+                .map(|input| {
+                    Box::pin(InMemoryShuffleStream::new(input)) as SendableRecordBatchStream
+                })
+                .collect(),
         )))
     }
 
@@ -136,20 +130,21 @@ impl ExecutionPlan for RayShuffleReaderExec {
     }
 }
 
-struct LocalShuffleStream {
-    reader: FileReader<File>,
+struct InMemoryShuffleStream {
+    reader: StreamReader<Cursor<Vec<u8>>>,
 }
 
-impl LocalShuffleStream {
-    pub fn new(reader: FileReader<File>) -> Self {
-        LocalShuffleStream { reader }
+impl InMemoryShuffleStream {
+    fn new(bytes: &Vec<u8>) -> Self {
+        let reader = StreamReader::try_new(Cursor::new(bytes.clone()), None).unwrap();
+        Self { reader }
     }
 }
 
-impl Stream for LocalShuffleStream {
+impl Stream for InMemoryShuffleStream {
     type Item = datafusion::arrow::error::Result<RecordBatch>;
 
-    fn poll_next(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(batch) = self.reader.next() {
             return Poll::Ready(Some(batch));
         }
@@ -157,7 +152,7 @@ impl Stream for LocalShuffleStream {
     }
 }
 
-impl RecordBatchStream for LocalShuffleStream {
+impl RecordBatchStream for InMemoryShuffleStream {
     fn schema(&self) -> SchemaRef {
         self.reader.schema()
     }

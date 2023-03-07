@@ -1,5 +1,5 @@
 use crate::planner::{make_execution_graph, PyExecutionGraph};
-use crate::shuffle::ShuffleCodec;
+use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec};
 use crate::utils::wait_for_future;
 use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::ipc::writer::StreamWriter;
@@ -10,7 +10,7 @@ use datafusion::execution::context::TaskContext;
 use datafusion::execution::disk_manager::DiskManagerConfig;
 use datafusion::execution::memory_pool::FairSpillPool;
 use datafusion::execution::runtime_env::RuntimeEnv;
-use datafusion::physical_plan::displayable;
+use datafusion::physical_plan::{displayable, ExecutionPlan};
 use datafusion::prelude::*;
 use datafusion_proto::bytes::{
     physical_plan_from_bytes_with_extension_codec, physical_plan_to_bytes_with_extension_codec,
@@ -92,9 +92,14 @@ impl PyContext {
     }
 
     /// Execute a partition of a query plan. This will typically be executing a shuffle write and write the results to disk
-    pub fn execute_partition(&self, plan: PyExecutionPlan, part: usize) -> PyResultSet {
+    pub fn execute_partition(
+        &self,
+        plan: PyExecutionPlan,
+        part: usize,
+        inputs: PyObject,
+    ) -> PyResultSet {
         let batches = self
-            ._execute_partition(plan, part)
+            ._execute_partition(plan, part, inputs)
             .unwrap()
             .iter()
             .map(|batch| batch.clone()) // TODO(@lsf): avoid clone
@@ -118,10 +123,40 @@ pub fn deserialize_execution_plan(bytes: Vec<u8>) -> PyResult<PyExecutionPlan> {
     ))
 }
 
+/// Iterate down an ExecutionPlan and set the input objects for RayShuffleReaderExec.
+fn _set_inputs(plan: Arc<dyn ExecutionPlan>, inputs: &PyObject, py: Python) -> () {
+    if let Some(reader_exec) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
+        // iterate over inputs, wrap in PyBytes and set as input objects
+        let input_objects = inputs
+            .as_ref(py)
+            .iter()
+            .expect("expected iterator")
+            .map(|input| {
+                input
+                    .unwrap()
+                    .downcast::<PyBytes>()
+                    .unwrap()
+                    .as_bytes()
+                    .to_vec()
+            })
+            .collect();
+        reader_exec.set_input_objects(input_objects);
+    } else {
+        for child in plan.children() {
+            _set_inputs(child, inputs, py);
+        }
+    }
+}
+
 impl PyContext {
     /// Execute a partition of a query plan. This will typically be executing a shuffle write and
     /// write the results to disk, except for the final query stage, which will return the data
-    fn _execute_partition(&self, plan: PyExecutionPlan, part: usize) -> Result<Vec<RecordBatch>> {
+    fn _execute_partition(
+        &self,
+        plan: PyExecutionPlan,
+        part: usize,
+        inputs: PyObject,
+    ) -> Result<Vec<RecordBatch>> {
         let ctx = Arc::new(TaskContext::new(
             "task_id".to_string(),
             "session_id".to_string(),
@@ -130,6 +165,10 @@ impl PyContext {
             HashMap::new(),
             Arc::new(RuntimeEnv::default()),
         ));
+        // TODO(@lsf): proper error handling
+        Python::with_gil(|py| {
+            _set_inputs(plan.plan.clone(), &inputs, py);
+        });
 
         // create a Tokio runtime to run the async code
         let rt = Runtime::new().unwrap();

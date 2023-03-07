@@ -14,10 +14,6 @@ def execute_query_stage(query_stages, stage_id, workers):
         child_futures.append(
             execute_query_stage.remote(query_stages, child_id, workers)
         )
-    child_results = ray.get(child_futures)
-    child_results = [ResultSet(r[0]) for r in child_results]
-    print(f"Query stage #{stage_id}: child results: {child_results}")
-    # TODO(@lsf): Need to pass the result set to this stage.
 
     # if the query stage has a single output partition then we need to execute for the output
     # partition, otherwise we need to execute in parallel for each input partition
@@ -36,13 +32,17 @@ def execute_query_stage(query_stages, stage_id, workers):
 
     plan_bytes = serialize_execution_plan(stage.get_execution_plan())
 
-    # TODO(@lsf): Need to pass child stage's shuffle output to each partition here.
+    # TODO(@lsf): can there ever be more than 1 child future?
+    inputs = child_futures[0] if len(child_futures) > 0 else []
+
     # round-robin allocation across workers
     futures = []
     for part in range(concurrency):
         worker_index = part % len(workers)
         futures.append(
-            workers[worker_index].execute_query_partition.remote(plan_bytes, part)
+            workers[worker_index].execute_query_partition.remote(
+                plan_bytes, part, inputs
+            )
         )
 
     print("Waiting for query stage #{} to complete".format(stage.id()))
@@ -51,6 +51,7 @@ def execute_query_stage(query_stages, stage_id, workers):
     end = time.time()
     print("Query stage #{} completed in {} seconds".format(stage.id(), end - start))
 
+    result_set = result_set[0] if len(result_set) == 1 else result_set
     return result_set
 
 

@@ -14,11 +14,12 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct RayShuffleWriterExec {
     pub stage_id: usize,
+    /// The child execution plan
     pub(crate) plan: Arc<dyn ExecutionPlan>,
     /// Output partitioning
     partitioning: Partitioning,
     /// Directory to write shuffle files from
-    pub shuffle_dir: String,
+    pub shuffle_dir: String, // TODO(@lsf) remove
     /// Metrics
     pub metrics: ExecutionPlanMetricsSet,
 }

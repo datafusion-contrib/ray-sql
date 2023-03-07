@@ -1,6 +1,7 @@
 import os
 
 import ray
+from raysql import ResultSet
 from raysql.context import RaySqlContext
 from raysql.worker import Worker
 
@@ -41,7 +42,9 @@ def load_query(n: int) -> str:
 def tpchq(ctx: RaySqlContext, q: int = 1):
     sql = load_query(q)
     result_set = ray.get(ctx.sql.remote(sql))
-    print(result_set[0])
+    print("Result:")
+    print(result_set)
+    print(ResultSet(result_set))
 
 
 use_ray_shuffle = True
