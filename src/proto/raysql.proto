@@ -46,8 +46,6 @@ message RayShuffleReaderExecNode {
   datafusion.Schema schema = 2;
   // this must match the output partitioning of the writer we are reading from
   datafusion.PhysicalHashRepartition partitioning = 3;
-  // directory for shuffle files
-  string shuffle_dir = 4;
 }
 
 message RayShuffleWriterExecNode {
@@ -57,6 +55,4 @@ message RayShuffleWriterExecNode {
   datafusion.PhysicalPlanNode plan = 2;
   // output partitioning schema
   datafusion.PhysicalHashRepartition partitioning = 3;
-  // directory for shuffle files
-  string shuffle_dir = 4;
 }

@@ -25,19 +25,12 @@ pub struct RayShuffleReaderExec {
     schema: SchemaRef,
     /// Output partitioning
     partitioning: Partitioning,
-    /// Directory to read shuffle files from
-    pub shuffle_dir: String, // TODO(@lsf) remove
     /// Input streams from Ray object store
     input_objects: RwLock<Vec<Vec<u8>>>, // TODO(@lsf) can we not use Rwlock?
 }
 
 impl RayShuffleReaderExec {
-    pub fn new(
-        stage_id: usize,
-        schema: SchemaRef,
-        partitioning: Partitioning,
-        shuffle_dir: &str,
-    ) -> Self {
+    pub fn new(stage_id: usize, schema: SchemaRef, partitioning: Partitioning) -> Self {
         let partitioning = match partitioning {
             Partitioning::Hash(expr, n) if expr.is_empty() => Partitioning::UnknownPartitioning(n),
             Partitioning::Hash(expr, n) => {
@@ -56,7 +49,6 @@ impl RayShuffleReaderExec {
             stage_id,
             schema,
             partitioning,
-            shuffle_dir: shuffle_dir.to_string(),
             input_objects: RwLock::new(vec![]),
         }
     }

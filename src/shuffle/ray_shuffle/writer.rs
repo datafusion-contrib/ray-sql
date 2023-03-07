@@ -18,19 +18,12 @@ pub struct RayShuffleWriterExec {
     pub(crate) plan: Arc<dyn ExecutionPlan>,
     /// Output partitioning
     partitioning: Partitioning,
-    /// Directory to write shuffle files from
-    pub shuffle_dir: String, // TODO(@lsf) remove
     /// Metrics
     pub metrics: ExecutionPlanMetricsSet,
 }
 
 impl RayShuffleWriterExec {
-    pub fn new(
-        stage_id: usize,
-        plan: Arc<dyn ExecutionPlan>,
-        partitioning: Partitioning,
-        shuffle_dir: &str,
-    ) -> Self {
+    pub fn new(stage_id: usize, plan: Arc<dyn ExecutionPlan>, partitioning: Partitioning) -> Self {
         let partitioning = match partitioning {
             Partitioning::Hash(expr, n) if expr.is_empty() => Partitioning::UnknownPartitioning(n),
             Partitioning::Hash(expr, n) => {
@@ -49,7 +42,6 @@ impl RayShuffleWriterExec {
             stage_id,
             plan,
             partitioning,
-            shuffle_dir: shuffle_dir.to_string(),
             metrics: ExecutionPlanMetricsSet::new(),
         }
     }

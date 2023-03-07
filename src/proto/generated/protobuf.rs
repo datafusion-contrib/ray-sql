@@ -69,9 +69,6 @@ pub struct RayShuffleReaderExecNode {
     pub partitioning: ::core::option::Option<
         ::datafusion_proto::protobuf::PhysicalHashRepartition,
     >,
-    /// directory for shuffle files
-    #[prost(string, tag = "4")]
-    pub shuffle_dir: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -87,7 +84,4 @@ pub struct RayShuffleWriterExecNode {
     pub partitioning: ::core::option::Option<
         ::datafusion_proto::protobuf::PhysicalHashRepartition,
     >,
-    /// directory for shuffle files
-    #[prost(string, tag = "4")]
-    pub shuffle_dir: ::prost::alloc::string::String,
 }

@@ -197,7 +197,6 @@ fn create_shuffle_exchange(
             stage_id,
             shuffle_writer_input,
             partitioning_scheme.clone(),
-            &temp_dir,
         ))
     } else {
         Arc::new(ShuffleWriterExec::new(
@@ -220,7 +219,6 @@ fn create_shuffle_exchange(
             stage_id,
             plan.schema(),
             partitioning_scheme,
-            &temp_dir,
         )))
     } else {
         Ok(Arc::new(ShuffleReaderExec::new(
@@ -396,7 +394,7 @@ mod test {
         ));
 
         output.push_str("RaySQL Plan\n===========\n\n");
-        let graph = make_execution_graph(plan)?;
+        let graph = make_execution_graph(plan, false)?;
         for id in 0..=graph.get_final_query_stage().id {
             let query_stage = graph.query_stages.get(&id).unwrap();
             output.push_str(&format!(
