@@ -1,10 +1,9 @@
 import ray
-from raysql import Context, QueryStage, ResultSet, serialize_execution_plan
-import time
+from raysql import Context, QueryStage, serialize_execution_plan
 
 
 @ray.remote
-def execute_query_stage(query_stages, stage_id, workers):
+def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
     plan_bytes = query_stages[stage_id]
     stage = QueryStage(stage_id, plan_bytes)
 
@@ -12,7 +11,7 @@ def execute_query_stage(query_stages, stage_id, workers):
     child_futures = []
     for child_id in stage.get_child_stage_ids():
         child_futures.append(
-            execute_query_stage.remote(query_stages, child_id, workers)
+            execute_query_stage.remote(query_stages, child_id, workers, use_ray_shuffle)
         )
 
     # if the query stage has a single output partition then we need to execute for the output
@@ -21,38 +20,42 @@ def execute_query_stage(query_stages, stage_id, workers):
     if stage.get_output_partition_count() == 1:
         # reduce stage
         concurrency = 1
+    output_partitions_count = stage.get_output_partition_count()
 
     print(
         "Scheduling query stage #{} with {} input partitions and {} output partitions".format(
-            stage.id(),
-            stage.get_input_partition_count(),
-            stage.get_output_partition_count(),
+            stage.id(), concurrency, output_partitions_count
         )
     )
 
     plan_bytes = serialize_execution_plan(stage.get_execution_plan())
 
-    # TODO(@lsf): can there ever be more than 1 child future?
+    # TODO(@lsf): deal with more than 1 child futures
     inputs = child_futures[0] if len(child_futures) > 0 else []
+    inputs = ray.get(inputs)  # 2-D array of input_partitions * output_partitions
+    print("Stage #{}'s child inputs: {}".format(stage.id(), inputs))
+
+    def _get_worker_inputs(part, concurrency):
+        ret = []
+        for lst in inputs:
+            num_parts = len(lst)
+            parts_per_worker = num_parts // concurrency
+            ret.extend(lst[part * parts_per_worker : (part + 1) * parts_per_worker])
+        return ret
 
     # round-robin allocation across workers
     futures = []
     for part in range(concurrency):
+        # TODO(@lsf) what happens if the number of output partitions is not equal
+        # to the concurrency here? Is that possible?
         worker_index = part % len(workers)
         futures.append(
-            workers[worker_index].execute_query_partition.remote(
-                plan_bytes, part, inputs
-            )
+            workers[worker_index]
+            .execute_query_partition.options(num_returns=output_partitions_count)
+            .remote(plan_bytes, part, *_get_worker_inputs(part, concurrency))
         )
 
-    print("Waiting for query stage #{} to complete".format(stage.id()))
-    start = time.time()
-    result_set = ray.get(futures)
-    end = time.time()
-    print("Query stage #{} completed in {} seconds".format(stage.id(), end - start))
-
-    result_set = result_set[0] if len(result_set) == 1 else result_set
-    return result_set
+    return futures
 
 
 @ray.remote
@@ -79,5 +82,9 @@ class RaySqlContext:
         ]
 
         # schedule execution
-        future = execute_query_stage.remote(query_stages, final_stage_id, self.workers)
-        return ray.get(future)
+        future = execute_query_stage.remote(
+            query_stages, final_stage_id, self.workers, self.use_ray_shuffle
+        )
+        stage_futures = ray.get(future)
+        # TODO(@lsf): we only support a single output partition for now
+        return ray.get(stage_futures[0])

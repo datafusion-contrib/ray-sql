@@ -11,6 +11,7 @@ use datafusion::physical_plan::{
 };
 use futures::Stream;
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::io::Cursor;
 use std::pin::Pin;
@@ -26,7 +27,7 @@ pub struct RayShuffleReaderExec {
     /// Output partitioning
     partitioning: Partitioning,
     /// Input streams from Ray object store
-    input_objects: RwLock<Vec<Vec<u8>>>, // TODO(@lsf) can we not use Rwlock?
+    input_objects_map: RwLock<HashMap<usize, Vec<Vec<u8>>>>, // TODO(@lsf) can we not use Rwlock?
 }
 
 impl RayShuffleReaderExec {
@@ -49,16 +50,20 @@ impl RayShuffleReaderExec {
             stage_id,
             schema,
             partitioning,
-            input_objects: RwLock::new(vec![]),
+            input_objects_map: RwLock::new(HashMap::new()),
         }
     }
 
-    pub fn set_input_objects(&self, input_objects: Vec<Vec<u8>>) {
-        println!("set_input_objects: {:?}", input_objects.len());
-        input_objects
-            .iter()
-            .for_each(|x| println!("set_input_objects: {:?}", x.len()));
-        *self.input_objects.write().unwrap() = input_objects;
+    pub fn set_input_objects(&self, partition: usize, input_objects: Vec<Vec<u8>>) {
+        println!(
+            "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) is set with {} shuffle inputs",
+            self.stage_id,
+            input_objects.len(),
+        );
+        self.input_objects_map
+            .write()
+            .unwrap()
+            .insert(partition, input_objects);
     }
 }
 
@@ -93,14 +98,19 @@ impl ExecutionPlan for RayShuffleReaderExec {
 
     fn execute(
         &self,
-        _partition: usize,
+        partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
+        let map = self.input_objects_map.read().unwrap();
+        let input_objects = map.get(&partition).unwrap();
+        println!(
+            "RayShuffleReaderExec[stage={}].execute(input_partition={partition})\nReading {} shuffle inputs",
+            self.stage_id,
+            input_objects.len(),
+        );
         Ok(Box::pin(CombinedRecordBatchStream::new(
             self.schema.clone(),
-            self.input_objects
-                .read()
-                .unwrap()
+            input_objects
                 .iter()
                 .map(|input| {
                     Box::pin(InMemoryShuffleStream::new(input)) as SendableRecordBatchStream

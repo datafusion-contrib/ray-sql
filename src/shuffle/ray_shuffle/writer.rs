@@ -1,12 +1,19 @@
 use datafusion::arrow::datatypes::SchemaRef;
+use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::common::{Result, Statistics};
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
-use datafusion::physical_plan::metrics::ExecutionPlanMetricsSet;
+use datafusion::physical_plan::memory::MemoryStream;
+use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
+use datafusion::physical_plan::repartition::BatchPartitioner;
+use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
     DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
 };
+use futures::StreamExt;
+use futures::TryStreamExt;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -83,7 +90,6 @@ impl ExecutionPlan for RayShuffleWriterExec {
             self.stage_id, self.partitioning
         )
     }
-
     fn execute(
         &self,
         input_partition: usize,
@@ -93,7 +99,59 @@ impl ExecutionPlan for RayShuffleWriterExec {
             "RayShuffleWriterExec[stage={}].execute(input_partition={input_partition})",
             self.stage_id
         );
-        self.plan.execute(input_partition, context)
+        let mut stream = self.plan.execute(input_partition, context)?;
+
+        let stage_id = self.stage_id;
+        let partitioning = self.output_partitioning();
+        let partition_count = partitioning.partition_count();
+        let repart_time =
+            MetricBuilder::new(&self.metrics).subset_time("repart_time", input_partition);
+        let schema = Arc::new(self.schema().as_ref().clone());
+
+        let results = async move {
+            // TODO(@lsf): why can't I reference self in here?
+            match &partitioning {
+                Partitioning::Hash(_, _) => {
+                    // TODO(@lsf) What happens if there are multiple RecordBatches
+                    // assigned to the same writer?
+                    let mut writers: Vec<RecordBatch> = vec![];
+                    for _ in 0..partition_count {
+                        writers.push(RecordBatch::new_empty(schema.clone()));
+                    }
+
+                    let mut partitioner =
+                        BatchPartitioner::try_new(partitioning, repart_time.clone())?;
+
+                    let mut rows = 0;
+
+                    while let Some(result) = stream.next().await {
+                        let input_batch = result?;
+                        rows += input_batch.num_rows();
+
+                        println!(
+                            "ShuffleWriterExec[stage={}] writing batch:\n{}",
+                            stage_id,
+                            pretty_format_batches(&[input_batch.clone()])?
+                        );
+
+                        partitioner.partition(input_batch, |output_partition, output_batch| {
+                            writers[output_partition] = output_batch;
+                            Ok(())
+                        })?;
+                    }
+                    println!(
+                        "RayShuffleWriterExec[stage={}] Finished processing stream with {rows} rows",
+                        stage_id
+                    );
+                    MemoryStream::try_new(writers, schema, None)
+                }
+                _ => unimplemented!(),
+            }
+        };
+        Ok(Box::pin(RecordBatchStreamAdapter::new(
+            self.schema(),
+            futures::stream::once(results).try_flatten(),
+        )))
     }
 
     fn statistics(&self) -> Statistics {

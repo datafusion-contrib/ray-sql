@@ -18,7 +18,7 @@ use datafusion_proto::bytes::{
 use datafusion_python::physical_plan::PyExecutionPlan;
 use futures::StreamExt;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyList};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -98,11 +98,12 @@ impl PyContext {
         part: usize,
         inputs: PyObject,
     ) -> PyResultSet {
-        let batches = self
+        let planstr = plan.display();
+        let batches: Vec<_> = self
             ._execute_partition(plan, part, inputs)
             .unwrap()
             .iter()
-            .map(|batch| batch.clone()) // TODO(@lsf): avoid clone
+            .map(|batch| PyRecordBatch::new(batch.clone())) // TODO(@lsf): avoid clone?
             .collect();
         PyResultSet::new(batches)
     }
@@ -124,7 +125,12 @@ pub fn deserialize_execution_plan(bytes: Vec<u8>) -> PyResult<PyExecutionPlan> {
 }
 
 /// Iterate down an ExecutionPlan and set the input objects for RayShuffleReaderExec.
-fn _set_inputs(plan: Arc<dyn ExecutionPlan>, inputs: &PyObject, py: Python) -> () {
+fn _set_inputs_for_ray_shuffle_reader(
+    plan: Arc<dyn ExecutionPlan>,
+    part: usize,
+    inputs: &PyObject,
+    py: Python,
+) -> () {
     if let Some(reader_exec) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
         // iterate over inputs, wrap in PyBytes and set as input objects
         let input_objects = inputs
@@ -140,10 +146,10 @@ fn _set_inputs(plan: Arc<dyn ExecutionPlan>, inputs: &PyObject, py: Python) -> (
                     .to_vec()
             })
             .collect();
-        reader_exec.set_input_objects(input_objects);
+        reader_exec.set_input_objects(part, input_objects);
     } else {
         for child in plan.children() {
-            _set_inputs(child, inputs, py);
+            _set_inputs_for_ray_shuffle_reader(child, part, inputs, py);
         }
     }
 }
@@ -167,7 +173,7 @@ impl PyContext {
         ));
         // TODO(@lsf): proper error handling
         Python::with_gil(|py| {
-            _set_inputs(plan.plan.clone(), &inputs, py);
+            _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py);
         });
 
         // create a Tokio runtime to run the async code
@@ -190,11 +196,11 @@ impl PyContext {
 
 #[pyclass(name = "ResultSet", module = "raysql", subclass)]
 pub struct PyResultSet {
-    batches: Vec<RecordBatch>,
+    batches: Vec<PyRecordBatch>,
 }
 
 impl PyResultSet {
-    fn new(batches: Vec<RecordBatch>) -> Self {
+    fn new(batches: Vec<PyRecordBatch>) -> Self {
         Self { batches }
     }
 }
@@ -202,25 +208,65 @@ impl PyResultSet {
 #[pymethods]
 impl PyResultSet {
     #[new]
-    fn py_new(py_bytes: &PyBytes) -> PyResult<Self> {
-        let reader = StreamReader::try_new(py_bytes.as_bytes(), None).unwrap();
-        let batches = reader.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>();
+    fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
+        let reader = StreamReader::try_new(py_obj.as_bytes(), None).unwrap();
+        let batches = reader
+            .into_iter()
+            .map(|r| PyRecordBatch::new(r.unwrap()))
+            .collect::<Vec<_>>();
         Ok(Self { batches })
     }
 
     fn __repr__(&self) -> PyResult<String> {
-        Ok(format!("{}", pretty_format_batches(&self.batches).unwrap()))
+        let batches: Vec<RecordBatch> = self.batches.iter().map(|b| b.batch.clone()).collect();
+        Ok(format!("{}", pretty_format_batches(&batches).unwrap()))
+    }
+
+    fn tobyteslist(&self, py: Python) -> PyResult<PyObject> {
+        let items: Vec<_> = self
+            .batches
+            .iter()
+            .map(|b| b.tobytes(py).unwrap())
+            .collect();
+        Ok(PyList::new(py, &items).into())
+    }
+}
+
+#[pyclass(name = "RecordBatch", module = "raysql", subclass)]
+pub struct PyRecordBatch {
+    pub(crate) batch: RecordBatch,
+}
+
+impl PyRecordBatch {
+    fn new(batch: RecordBatch) -> Self {
+        Self { batch }
+    }
+}
+
+#[pymethods]
+impl PyRecordBatch {
+    #[new]
+    fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
+        let reader = StreamReader::try_new(py_obj.as_bytes(), None).unwrap();
+        let mut batches: Vec<_> = reader.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>();
+        Ok(Self {
+            batch: batches.pop().unwrap(),
+        })
+    }
+
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!(
+            "{}",
+            pretty_format_batches(&[self.batch.clone()]).unwrap()
+        ))
     }
 
     fn tobytes(&self, py: Python) -> PyResult<PyObject> {
         // TODO(@lsf): wrap errors into PyErr
         let mut buf = Vec::<u8>::new();
-        if !self.batches.is_empty() {
-            let mut writer =
-                StreamWriter::try_new(&mut buf, self.batches[0].schema().as_ref()).unwrap();
-            for batch in &self.batches {
-                writer.write(batch).unwrap();
-            }
+        {
+            let mut writer = StreamWriter::try_new(&mut buf, self.batch.schema().as_ref()).unwrap();
+            writer.write(&self.batch).unwrap();
             writer.finish().unwrap();
         }
         Ok(PyBytes::new(py, &buf).into())

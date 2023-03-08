@@ -8,7 +8,7 @@ from raysql.worker import Worker
 DATA_DIR = "/home/ubuntu/tpch/sf1-parquet"
 # DATA_DIR = "/home/ubuntu/sf10-parquet"
 
-ray.init()
+ray.init(local_mode=True)
 
 
 def setup_context(use_ray_shuffle: bool) -> RaySqlContext:
@@ -44,7 +44,7 @@ def tpchq(ctx: RaySqlContext, q: int = 1):
     result_set = ray.get(ctx.sql.remote(sql))
     print("Result:")
     print(result_set)
-    print(ResultSet(result_set))
+    print(ResultSet(result_set[0]))
 
 
 use_ray_shuffle = True
