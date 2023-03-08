@@ -102,13 +102,8 @@ impl ExecutionPlan for RayShuffleReaderExec {
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
         let map = self.input_objects_map.read().unwrap();
-        let input_objects = map.get(&partition).expect(
-            format!(
-                "input objects for stage {} partition {}",
-                self.stage_id, partition
-            )
-            .as_str(),
-        );
+        let empty_input_objects = vec![];
+        let input_objects = map.get(&partition).unwrap_or(&empty_input_objects);
         println!(
             "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) with {} shuffle inputs",
             self.stage_id,
