@@ -13,8 +13,8 @@ class Worker:
 
         if self.debug:
             print(
-                "Executing partition #{} with {} shuffle inputs:\n{}".format(
-                    part, len(inputs), plan.display_indent()
+                "Worker executing plan {} partition #{} with {} shuffle inputs:\n{}".format(
+                    plan.display(), part, len(inputs), plan.display_indent()
                 )
             )
 

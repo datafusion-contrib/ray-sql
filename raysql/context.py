@@ -17,10 +17,10 @@ def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
     # if the query stage has a single output partition then we need to execute for the output
     # partition, otherwise we need to execute in parallel for each input partition
     concurrency = stage.get_input_partition_count()
-    if stage.get_output_partition_count() == 1:
+    output_partitions_count = stage.get_output_partition_count()
+    if output_partitions_count == 1:
         # reduce stage
         concurrency = 1
-    output_partitions_count = stage.get_output_partition_count()
 
     print(
         "Scheduling query stage #{} with {} input partitions and {} output partitions".format(
@@ -46,8 +46,6 @@ def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
     # round-robin allocation across workers
     futures = []
     for part in range(concurrency):
-        # TODO(@lsf) what happens if the number of output partitions is not equal
-        # to the concurrency here? Is that possible?
         worker_index = part % len(workers)
         futures.append(
             workers[worker_index]

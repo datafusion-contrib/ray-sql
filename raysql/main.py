@@ -8,7 +8,8 @@ from raysql.worker import Worker
 DATA_DIR = "/home/ubuntu/tpch/sf1-parquet"
 # DATA_DIR = "/home/ubuntu/sf10-parquet"
 
-ray.init(local_mode=True)
+ray.init()
+# ray.init(local_mode=True)
 
 
 def setup_context(use_ray_shuffle: bool) -> RaySqlContext:

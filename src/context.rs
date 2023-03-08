@@ -98,8 +98,7 @@ impl PyContext {
         part: usize,
         inputs: PyObject,
     ) -> PyResultSet {
-        let planstr = plan.display();
-        let batches: Vec<_> = self
+        let batches = self
             ._execute_partition(plan, part, inputs)
             .unwrap()
             .iter()
@@ -136,7 +135,7 @@ fn _set_inputs_for_ray_shuffle_reader(
         let input_objects = inputs
             .as_ref(py)
             .iter()
-            .expect("expected iterator")
+            .expect("expected iterable")
             .map(|input| {
                 input
                     .unwrap()
