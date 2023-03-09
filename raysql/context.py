@@ -47,9 +47,12 @@ def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
     futures = []
     for part in range(concurrency):
         worker_index = part % len(workers)
+        opt = {}
+        if use_ray_shuffle:
+            opt["num_returns"] = output_partitions_count
         futures.append(
             workers[worker_index]
-            .execute_query_partition.options(num_returns=output_partitions_count)
+            .execute_query_partition.options(**opt)
             .remote(plan_bytes, part, *_get_worker_inputs(part, concurrency))
         )
 
