@@ -37,6 +37,8 @@ def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
 
     def _get_worker_inputs(part, concurrency):
         ret = []
+        if not use_ray_shuffle:
+            return ret
         for lst in inputs:
             num_parts = len(lst)
             parts_per_worker = num_parts // concurrency
