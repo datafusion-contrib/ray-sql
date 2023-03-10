@@ -111,6 +111,17 @@ impl ExecutionPlan for RayShuffleWriterExec {
         let results = async move {
             // TODO(@lsf): why can't I reference self in here?
             match &partitioning {
+                Partitioning::UnknownPartitioning(_) => {
+                    let mut batches: Vec<RecordBatch> = vec![];
+                    while let Some(result) = stream.next().await {
+                        batches.push(result?);
+                    }
+                    MemoryStream::try_new(
+                        vec![concat_batches(&schema, &batches).unwrap()],
+                        schema,
+                        None,
+                    )
+                }
                 Partitioning::Hash(_, _) => {
                     // TODO(@lsf) What happens if there are multiple RecordBatches
                     // assigned to the same writer?
