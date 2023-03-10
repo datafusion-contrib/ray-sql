@@ -14,6 +14,12 @@ def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
             execute_query_stage.remote(query_stages, child_id, workers, use_ray_shuffle)
         )
 
+    # if we are using disk-based shuffle, wait until the child stages to finish
+    # writing the shuffle files to disk first.
+    if not use_ray_shuffle:
+        futures = ray.get(child_futures)
+        ray.get([f for lst in futures for f in lst])
+
     # if the query stage has a single output partition then we need to execute for the output
     # partition, otherwise we need to execute in parallel for each input partition
     concurrency = stage.get_input_partition_count()
