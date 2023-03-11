@@ -5,7 +5,7 @@ use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::ipc::writer::StreamWriter;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
-use datafusion::error::Result;
+use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::disk_manager::DiskManagerConfig;
 use datafusion::execution::memory_pool::FairSpillPool;
@@ -21,6 +21,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 use std::collections::HashMap;
 use std::sync::Arc;
+use datafusion::arrow::error::ArrowError;
+use datafusion_python::errors::py_datafusion_err;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
@@ -129,19 +131,19 @@ fn _set_inputs_for_ray_shuffle_reader(
     part: usize,
     inputs: &PyObject,
     py: Python,
-) -> () {
+) -> Result<()> {
     if let Some(reader_exec) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
         let stage_id = reader_exec.stage_id;
         // iterate over inputs, wrap in PyBytes and set as input objects
-        let input_partitions_map = inputs.as_ref(py).downcast::<PyDict>().unwrap();
+        let input_partitions_map = inputs.as_ref(py).downcast::<PyDict>().map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
         match input_partitions_map.get_item(stage_id) {
             Some(input_partitions) => {
-                let input_partitions = input_partitions.downcast::<PyList>().unwrap();
+                let input_partitions = input_partitions.downcast::<PyList>().map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
                 let input_objects = input_partitions
                     .iter()
-                    .map(|input| input.downcast::<PyBytes>().unwrap().as_bytes().to_vec())
+                    .map(|input| input.downcast::<PyBytes>().expect("expected PyBytes").as_bytes().to_vec())
                     .collect();
-                reader_exec.set_input_partitions(part, input_objects);
+                reader_exec.set_input_partitions(part, input_objects)?;
             }
             None => {
                 println!("Warning: No input partitions for stage {}", stage_id);
@@ -149,9 +151,10 @@ fn _set_inputs_for_ray_shuffle_reader(
         };
     } else {
         for child in plan.children() {
-            _set_inputs_for_ray_shuffle_reader(child, part, inputs, py);
+            _set_inputs_for_ray_shuffle_reader(child, part, inputs, py)?;
         }
     }
+    Ok(())
 }
 
 impl PyContext {
@@ -171,10 +174,9 @@ impl PyContext {
             HashMap::new(),
             Arc::new(RuntimeEnv::default()),
         ));
-        // TODO(@lsf): proper error handling
         Python::with_gil(|py| {
-            _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py);
-        });
+            _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
+        })?;
 
         // create a Tokio runtime to run the async code
         let rt = Runtime::new().unwrap();
@@ -209,11 +211,12 @@ impl PyResultSet {
 impl PyResultSet {
     #[new]
     fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
-        let reader = StreamReader::try_new(py_obj.as_bytes(), None).unwrap();
-        let batches = reader
-            .into_iter()
-            .map(|r| PyRecordBatch::new(r.unwrap()))
-            .collect::<Vec<_>>();
+        let reader = StreamReader::try_new(py_obj.as_bytes(), None).map_err(py_datafusion_err)?;
+        let mut batches = vec![];
+        for batch in reader {
+            let batch = batch.map_err(|e| py_datafusion_err(e))?;
+            batches.push(PyRecordBatch::new(batch));
+        }
         Ok(Self { batches })
     }
 
@@ -223,11 +226,10 @@ impl PyResultSet {
     }
 
     fn tobyteslist(&self, py: Python) -> PyResult<PyObject> {
-        let items: Vec<_> = self
-            .batches
-            .iter()
-            .map(|b| b.tobytes(py).unwrap())
-            .collect();
+        let mut items = vec![];
+        for batch in &self.batches {
+            items.push(batch.tobytes(py)?);
+        }
         Ok(PyList::new(py, &items).into())
     }
 }
@@ -247,11 +249,16 @@ impl PyRecordBatch {
 impl PyRecordBatch {
     #[new]
     fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
-        let reader = StreamReader::try_new(py_obj.as_bytes(), None).unwrap();
-        let mut batches: Vec<_> = reader.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>();
-        Ok(Self {
-            batch: batches.pop().unwrap(),
-        })
+        let reader = StreamReader::try_new(py_obj.as_bytes(), None).map_err(|e| py_datafusion_err(e))?;
+        let mut batches = vec![];
+        for r in reader {
+            batches.push(r.map_err(|e| py_datafusion_err(e))?);
+        }
+        if let Some(batch) = batches.pop() {
+            Ok(Self { batch})
+        } else {
+            Err(py_datafusion_err("no batches"))
+        }
     }
 
     fn __repr__(&self) -> PyResult<String> {
@@ -262,13 +269,15 @@ impl PyRecordBatch {
     }
 
     fn tobytes(&self, py: Python) -> PyResult<PyObject> {
-        // TODO(@lsf): wrap errors into PyErr
         let mut buf = Vec::<u8>::new();
-        {
-            let mut writer = StreamWriter::try_new(&mut buf, self.batch.schema().as_ref()).unwrap();
-            writer.write(&self.batch).unwrap();
-            writer.finish().unwrap();
-        }
+        write_batch(&mut buf, &self.batch).map_err(|e| py_datafusion_err(e))?;
         Ok(PyBytes::new(py, &buf).into())
     }
+
+}
+
+fn write_batch(mut buf: &mut Vec<u8>, batch: &RecordBatch) -> Result<(), ArrowError> {
+    let mut writer = StreamWriter::try_new(&mut buf, batch.schema().as_ref())?;
+    writer.write(batch)?;
+    writer.finish()
 }

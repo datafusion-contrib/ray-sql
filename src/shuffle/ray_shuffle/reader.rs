@@ -17,6 +17,7 @@ use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
+use datafusion::error::DataFusionError;
 
 type PartitionId = usize;
 type StageId = usize;
@@ -57,7 +58,7 @@ impl RayShuffleReaderExec {
         }
     }
 
-    pub fn set_input_partitions(&self, partition: PartitionId, input_partitions: Vec<Vec<u8>>) {
+    pub fn set_input_partitions(&self, partition: PartitionId, input_partitions: Vec<Vec<u8>>) -> Result<(), DataFusionError> {
         println!(
             "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) is set with {} shuffle inputs",
             self.stage_id,
@@ -67,6 +68,7 @@ impl RayShuffleReaderExec {
             .write()
             .unwrap()
             .insert(partition, input_partitions);
+        Ok(())
     }
 }
 
@@ -104,7 +106,7 @@ impl ExecutionPlan for RayShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let map = self.input_partitions_map.read().unwrap();
+        let map = self.input_partitions_map.read().expect("got lock");
         let empty_input_objects = vec![];
         let input_objects = map.get(&partition).unwrap_or(&empty_input_objects);
         println!(
@@ -112,14 +114,13 @@ impl ExecutionPlan for RayShuffleReaderExec {
             self.stage_id,
             input_objects.len(),
         );
+        let mut streams = vec![];
+        for input in input_objects {
+            streams.push(Box::pin(InMemoryShuffleStream::try_new(input)?) as SendableRecordBatchStream);
+        }
         Ok(Box::pin(CombinedRecordBatchStream::new(
             self.schema.clone(),
-            input_objects
-                .iter()
-                .map(|input| {
-                    Box::pin(InMemoryShuffleStream::new(input)) as SendableRecordBatchStream
-                })
-                .collect(),
+            streams,
         )))
     }
 
@@ -141,9 +142,9 @@ struct InMemoryShuffleStream {
 }
 
 impl InMemoryShuffleStream {
-    fn new(bytes: &Vec<u8>) -> Self {
-        let reader = StreamReader::try_new(Cursor::new(bytes.clone()), None).unwrap();
-        Self { reader }
+    fn try_new(bytes: &Vec<u8>) -> Result<Self, DataFusionError> {
+        let reader = StreamReader::try_new(Cursor::new(bytes.clone()), None)?;
+        Ok(Self { reader })
     }
 }
 
