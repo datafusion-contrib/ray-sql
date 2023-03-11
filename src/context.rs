@@ -21,6 +21,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 use std::collections::HashMap;
 use std::sync::Arc;
+use datafusion::arrow::error::ArrowError;
 use datafusion_python::errors::py_datafusion_err;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
@@ -249,10 +250,15 @@ impl PyRecordBatch {
     #[new]
     fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
         let reader = StreamReader::try_new(py_obj.as_bytes(), None).map_err(|e| py_datafusion_err(e))?;
-        let mut batches: Vec<_> = reader.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>();
-        Ok(Self {
-            batch: batches.pop().unwrap(),
-        })
+        let mut batches = vec![];
+        for r in reader {
+            batches.push(r.map_err(|e| py_datafusion_err(e))?);
+        }
+        if let Some(batch) = batches.pop() {
+            Ok(Self { batch})
+        } else {
+            Err(py_datafusion_err("no batches"))
+        }
     }
 
     fn __repr__(&self) -> PyResult<String> {
@@ -263,13 +269,15 @@ impl PyRecordBatch {
     }
 
     fn tobytes(&self, py: Python) -> PyResult<PyObject> {
-        // TODO(@lsf): wrap errors into PyErr
         let mut buf = Vec::<u8>::new();
-        {
-            let mut writer = StreamWriter::try_new(&mut buf, self.batch.schema().as_ref()).unwrap();
-            writer.write(&self.batch).unwrap();
-            writer.finish().unwrap();
-        }
+        write_batch(&mut buf, &self.batch).map_err(|e| py_datafusion_err(e))?;
         Ok(PyBytes::new(py, &buf).into())
     }
+
+}
+
+fn write_batch(mut buf: &mut Vec<u8>, batch: &RecordBatch) -> Result<(), ArrowError> {
+    let mut writer = StreamWriter::try_new(&mut buf, batch.schema().as_ref())?;
+    writer.write(batch)?;
+    writer.finish()
 }
