@@ -1,11 +1,22 @@
 import ray
-from raysql import Context, QueryStage, serialize_execution_plan
+
+from raysql import Context, QueryStage, ResultSet, serialize_execution_plan
+from raysql.worker import Worker
 
 
 @ray.remote
-def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
-    plan_bytes = query_stages[stage_id]
-    stage = QueryStage(stage_id, plan_bytes)
+def execute_query_stage(
+    query_stages: list[QueryStage],
+    stage_id: int,
+    workers: list[Worker],
+    use_ray_shuffle: bool,
+) -> tuple[int, list[ray.ObjectRef]]:
+    """
+    Execute a query stage on the workers.
+
+    Returns the stage ID, and a list of futures for the output partitions of the query stage.
+    """
+    stage = QueryStage(stage_id, query_stages[stage_id])
 
     # execute child stages first
     child_futures = []
@@ -28,48 +39,64 @@ def execute_query_stage(query_stages, stage_id, workers, use_ray_shuffle):
         )
     )
 
-    plan_bytes = serialize_execution_plan(stage.get_execution_plan())
+    # Coordinate shuffle partitions
+    child_outputs = ray.get(child_futures)
 
-    # TODO(@lsf): deal with more than 1 child futures
-    inputs = child_futures[0] if len(child_futures) > 0 else []
-    inputs = ray.get(inputs)  # 2-D array of input_partitions * output_partitions
-    print("Stage #{}'s child inputs: {}".format(stage.id(), inputs))
+    def _get_worker_inputs(part: int) -> dict[int, list[ray.ObjectRef]]:
+        ret = {}
+        if not use_ray_shuffle:
+            return ret
+        return {c: get_child_inputs(part, lst) for c, lst in child_outputs}
 
-    def _get_worker_inputs(part, concurrency):
+    def get_child_inputs(
+        part: int, inputs: list[list[ray.ObjectRef]]
+    ) -> list[ray.ObjectRef]:
         ret = []
         for lst in inputs:
-            num_parts = len(lst)
-            parts_per_worker = num_parts // concurrency
-            ret.extend(lst[part * parts_per_worker : (part + 1) * parts_per_worker])
+            if isinstance(lst, list):
+                num_parts = len(lst)
+                parts_per_worker = num_parts // concurrency
+                ret.extend(lst[part * parts_per_worker : (part + 1) * parts_per_worker])
+            else:
+                ret.append(lst)
         return ret
 
+    # if we are using disk-based shuffle, wait until the child stages to finish
+    # writing the shuffle files to disk first.
+    if not use_ray_shuffle:
+        ray.get([f for _, lst in child_outputs for f in lst])
+
     # round-robin allocation across workers
+    plan_bytes = serialize_execution_plan(stage.get_execution_plan())
     futures = []
     for part in range(concurrency):
         worker_index = part % len(workers)
+        opt = {}
+        if use_ray_shuffle:
+            opt["num_returns"] = output_partitions_count
         futures.append(
             workers[worker_index]
-            .execute_query_partition.options(num_returns=output_partitions_count)
-            .remote(plan_bytes, part, *_get_worker_inputs(part, concurrency))
+            .execute_query_partition.options(**opt)
+            .remote(plan_bytes, part, _get_worker_inputs(part))
         )
 
-    return futures
+    return stage_id, futures
 
 
 @ray.remote
 class RaySqlContext:
-    def __init__(self, workers, use_ray_shuffle):
+    def __init__(self, workers: list[Worker], use_ray_shuffle: bool):
         self.ctx = Context(len(workers), use_ray_shuffle)
         self.workers = workers
         self.use_ray_shuffle = use_ray_shuffle
 
-    def register_csv(self, table_name, path, has_header):
+    def register_csv(self, table_name: str, path: str, has_header: bool):
         self.ctx.register_csv(table_name, path, has_header)
 
-    def register_parquet(self, table_name, path):
+    def register_parquet(self, table_name: str, path: str):
         self.ctx.register_parquet(table_name, path)
 
-    def sql(self, sql):
+    def sql(self, sql: str) -> ResultSet:
         graph = self.ctx.plan(sql)
         final_stage_id = graph.get_final_query_stage().id()
 
@@ -83,6 +110,7 @@ class RaySqlContext:
         future = execute_query_stage.remote(
             query_stages, final_stage_id, self.workers, self.use_ray_shuffle
         )
-        stage_futures = ray.get(future)
-        # TODO(@lsf): we only support a single output partition for now
-        return ray.get(stage_futures[0])
+        _, partitions = ray.get(future)
+        # TODO(@lsf): we only support a single output partition for now?
+        result = ray.get(partitions[0])
+        return result

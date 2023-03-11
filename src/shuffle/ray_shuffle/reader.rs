@@ -19,20 +19,23 @@ use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use datafusion::error::DataFusionError;
 
+type PartitionId = usize;
+type StageId = usize;
+
 #[derive(Debug)]
 pub struct RayShuffleReaderExec {
     /// Query stage to read from
-    pub stage_id: usize,
+    pub stage_id: StageId,
     /// The output schema of the query stage being read from
     schema: SchemaRef,
     /// Output partitioning
     partitioning: Partitioning,
     /// Input streams from Ray object store
-    input_objects_map: RwLock<HashMap<usize, Vec<Vec<u8>>>>, // TODO(@lsf) can we not use Rwlock?
+    input_partitions_map: RwLock<HashMap<PartitionId, Vec<Vec<u8>>>>, // TODO(@lsf) can we not use Rwlock?
 }
 
 impl RayShuffleReaderExec {
-    pub fn new(stage_id: usize, schema: SchemaRef, partitioning: Partitioning) -> Self {
+    pub fn new(stage_id: StageId, schema: SchemaRef, partitioning: Partitioning) -> Self {
         let partitioning = match partitioning {
             Partitioning::Hash(expr, n) if expr.is_empty() => Partitioning::UnknownPartitioning(n),
             Partitioning::Hash(expr, n) => {
@@ -51,20 +54,20 @@ impl RayShuffleReaderExec {
             stage_id,
             schema,
             partitioning,
-            input_objects_map: RwLock::new(HashMap::new()),
+            input_partitions_map: RwLock::new(HashMap::new()),
         }
     }
 
-    pub fn set_input_objects(&self, partition: usize, input_objects: Vec<Vec<u8>>) -> Result<(), DataFusionError> {
+    pub fn set_input_partitions(&self, partition: PartitionId, input_partitions: Vec<Vec<u8>>) -> Result<(), DataFusionError> {
         println!(
             "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) is set with {} shuffle inputs",
             self.stage_id,
-            input_objects.len(),
+            input_partitions.len(),
         );
-        self.input_objects_map
+        self.input_partitions_map
             .write()
             .unwrap()
-            .insert(partition, input_objects);
+            .insert(partition, input_partitions);
         Ok(())
     }
 }
@@ -103,28 +106,22 @@ impl ExecutionPlan for RayShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let map = self.input_objects_map.read().expect("lock");
-        if let Some(input_objects) = map.get(&partition) {
-            println!(
-                "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) with {} shuffle inputs",
-                self.stage_id,
-                input_objects.len(),
-            );
-            let mut streams = vec![];
-            for input in input_objects {
-                streams.push(Box::pin(InMemoryShuffleStream::try_new(input)?) as SendableRecordBatchStream);
-            }
-            Ok(Box::pin(CombinedRecordBatchStream::new(
-                self.schema.clone(),
-                streams,
-            )))
-        } else {
-            Err(DataFusionError::Execution(format!(
-                    "input objects for stage {} partition {}",
-                    self.stage_id, partition
-                )
-            ))
+        let map = self.input_partitions_map.read().unwrap();
+        let empty_input_objects = vec![];
+        let input_objects = map.get(&partition).unwrap_or(&empty_input_objects);
+        println!(
+            "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) with {} shuffle inputs",
+            self.stage_id,
+            input_objects.len(),
+        );
+        let mut streams = vec![];
+        for input in input_objects {
+            streams.push(Box::pin(InMemoryShuffleStream::try_new(input)?) as SendableRecordBatchStream);
         }
+        Ok(Box::pin(CombinedRecordBatchStream::new(
+            self.schema.clone(),
+            streams,
+        )))
     }
 
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {

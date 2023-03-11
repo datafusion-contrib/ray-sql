@@ -1,6 +1,6 @@
+use datafusion::arrow::compute::concat_batches;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::common::{Result, Statistics};
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
@@ -111,12 +111,23 @@ impl ExecutionPlan for RayShuffleWriterExec {
         let results = async move {
             // TODO(@lsf): why can't I reference self in here?
             match &partitioning {
+                Partitioning::UnknownPartitioning(_) => {
+                    let mut batches: Vec<RecordBatch> = vec![];
+                    while let Some(result) = stream.next().await {
+                        batches.push(result?);
+                    }
+                    MemoryStream::try_new(
+                        vec![concat_batches(&schema, &batches).unwrap()],
+                        schema,
+                        None,
+                    )
+                }
                 Partitioning::Hash(_, _) => {
                     // TODO(@lsf) What happens if there are multiple RecordBatches
                     // assigned to the same writer?
-                    let mut writers: Vec<RecordBatch> = vec![];
+                    let mut writers: Vec<Vec<RecordBatch>> = vec![];
                     for _ in 0..partition_count {
-                        writers.push(RecordBatch::new_empty(schema.clone()));
+                        writers.push(vec![]);
                     }
 
                     let mut partitioner =
@@ -127,23 +138,24 @@ impl ExecutionPlan for RayShuffleWriterExec {
                     while let Some(result) = stream.next().await {
                         let input_batch = result?;
                         rows += input_batch.num_rows();
-
-                        println!(
-                            "ShuffleWriterExec[stage={}] writing batch:\n{}",
-                            stage_id,
-                            pretty_format_batches(&[input_batch.clone()])?
-                        );
-
                         partitioner.partition(input_batch, |output_partition, output_batch| {
-                            writers[output_partition] = output_batch;
+                            println!(
+                                "ShuffleWriterExec[stage={}] writing batch output (partition {})",
+                                stage_id, output_partition
+                            );
+                            writers[output_partition].push(output_batch);
                             Ok(())
                         })?;
                     }
                     println!(
-                        "RayShuffleWriterExec[stage={}] Finished processing stream with {rows} rows",
+                        "RayShuffleWriterExec[stage={}] finished processing stream with {rows} rows",
                         stage_id
                     );
-                    MemoryStream::try_new(writers, schema, None)
+                    let result_batches: Vec<_> = writers
+                        .iter()
+                        .map(|batches| concat_batches(&schema, batches).unwrap())
+                        .collect();
+                    MemoryStream::try_new(result_batches, schema, None)
                 }
                 _ => unimplemented!(),
             }

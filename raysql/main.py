@@ -40,14 +40,13 @@ def load_query(n: int) -> str:
         return fin.read()
 
 
-def tpchq(ctx: RaySqlContext, q: int = 1):
+def tpchq(ctx: RaySqlContext, q: int = 14):
     sql = load_query(q)
     result_set = ray.get(ctx.sql.remote(sql))
     print("Result:")
-    print(result_set)
-    print(ResultSet(result_set[0]))
+    print(ResultSet(result_set))
 
 
-use_ray_shuffle = True
+use_ray_shuffle = False
 ctx = setup_context(use_ray_shuffle)
 tpchq(ctx)

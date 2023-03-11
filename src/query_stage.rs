@@ -1,6 +1,6 @@
 use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec, ShuffleReaderExec};
 use datafusion::error::Result;
-use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::{ExecutionPlan, Partitioning};
 use datafusion::prelude::SessionContext;
 use datafusion_proto::bytes::physical_plan_from_bytes_with_extension_codec;
 use datafusion_python::physical_plan::PyExecutionPlan;
@@ -47,7 +47,13 @@ impl PyQueryStage {
     }
 
     pub fn get_output_partition_count(&self) -> usize {
-        self.stage.plan.output_partitioning().partition_count()
+        match self.stage.plan.output_partitioning() {
+            Partitioning::UnknownPartitioning(_) => {
+                println!("UnknownPartitioning returning 1");
+                1
+            }
+            p => p.partition_count(),
+        }
     }
 }
 
@@ -77,7 +83,14 @@ impl QueryStage {
     }
 
     pub fn get_output_partition_count(&self) -> usize {
-        self.plan.output_partitioning().partition_count()
+        // TODO(@lsf) UnknownPartitioning should return 1?
+        match self.plan.output_partitioning() {
+            Partitioning::UnknownPartitioning(_) => {
+                println!("UnknownPartitioning returning 1");
+                1
+            }
+            p => p.partition_count(),
+        }
     }
 }
 
