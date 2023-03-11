@@ -129,7 +129,7 @@ fn _set_inputs_for_ray_shuffle_reader(
     part: usize,
     inputs: &PyObject,
     py: Python,
-) -> () {
+) -> Result<()> {
     if let Some(reader_exec) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
         // iterate over inputs, wrap in PyBytes and set as input objects
         let input_objects = inputs
@@ -145,12 +145,13 @@ fn _set_inputs_for_ray_shuffle_reader(
                     .to_vec()
             })
             .collect();
-        reader_exec.set_input_objects(part, input_objects);
+        reader_exec.set_input_objects(part, input_objects)?;
     } else {
         for child in plan.children() {
-            _set_inputs_for_ray_shuffle_reader(child, part, inputs, py);
+            _set_inputs_for_ray_shuffle_reader(child, part, inputs, py)?;
         }
     }
+    Ok(())
 }
 
 impl PyContext {
@@ -170,10 +171,9 @@ impl PyContext {
             HashMap::new(),
             Arc::new(RuntimeEnv::default()),
         ));
-        // TODO(@lsf): proper error handling
         Python::with_gil(|py| {
-            _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py);
-        });
+            _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
+        })?;
 
         // create a Tokio runtime to run the async code
         let rt = Runtime::new().unwrap();

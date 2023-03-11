@@ -17,6 +17,7 @@ use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
+use datafusion::error::DataFusionError;
 
 #[derive(Debug)]
 pub struct RayShuffleReaderExec {
@@ -54,7 +55,7 @@ impl RayShuffleReaderExec {
         }
     }
 
-    pub fn set_input_objects(&self, partition: usize, input_objects: Vec<Vec<u8>>) {
+    pub fn set_input_objects(&self, partition: usize, input_objects: Vec<Vec<u8>>) -> Result<(), DataFusionError> {
         println!(
             "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) is set with {} shuffle inputs",
             self.stage_id,
@@ -64,6 +65,7 @@ impl RayShuffleReaderExec {
             .write()
             .unwrap()
             .insert(partition, input_objects);
+        Ok(())
     }
 }
 
@@ -101,28 +103,28 @@ impl ExecutionPlan for RayShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let map = self.input_objects_map.read().unwrap();
-        let input_objects = map.get(&partition).expect(
-            format!(
-                "input objects for stage {} partition {}",
-                self.stage_id, partition
-            )
-            .as_str(),
-        );
-        println!(
-            "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) with {} shuffle inputs",
-            self.stage_id,
-            input_objects.len(),
-        );
-        Ok(Box::pin(CombinedRecordBatchStream::new(
-            self.schema.clone(),
-            input_objects
-                .iter()
-                .map(|input| {
-                    Box::pin(InMemoryShuffleStream::new(input)) as SendableRecordBatchStream
-                })
-                .collect(),
-        )))
+        let map = self.input_objects_map.read().expect("lock");
+        if let Some(input_objects) = map.get(&partition) {
+            println!(
+                "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) with {} shuffle inputs",
+                self.stage_id,
+                input_objects.len(),
+            );
+            let mut streams = vec![];
+            for input in input_objects {
+                streams.push(Box::pin(InMemoryShuffleStream::try_new(input)?) as SendableRecordBatchStream);
+            }
+            Ok(Box::pin(CombinedRecordBatchStream::new(
+                self.schema.clone(),
+                streams,
+            )))
+        } else {
+            Err(DataFusionError::Execution(format!(
+                    "input objects for stage {} partition {}",
+                    self.stage_id, partition
+                )
+            ))
+        }
     }
 
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
@@ -143,9 +145,9 @@ struct InMemoryShuffleStream {
 }
 
 impl InMemoryShuffleStream {
-    fn new(bytes: &Vec<u8>) -> Self {
-        let reader = StreamReader::try_new(Cursor::new(bytes.clone()), None).unwrap();
-        Self { reader }
+    fn try_new(bytes: &Vec<u8>) -> Result<Self, DataFusionError> {
+        let reader = StreamReader::try_new(Cursor::new(bytes.clone()), None)?;
+        Ok(Self { reader })
     }
 }
 
