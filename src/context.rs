@@ -210,7 +210,7 @@ impl PyResultSet {
 impl PyResultSet {
     #[new]
     fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
-        let reader = StreamReader::try_new(py_obj.as_bytes(), None).unwrap();
+        let reader = StreamReader::try_new(py_obj.as_bytes(), None).map_err(py_datafusion_err)?;
         let mut batches = vec![];
         for batch in reader {
             let batch = batch.map_err(|e| py_datafusion_err(e))?;
@@ -248,7 +248,7 @@ impl PyRecordBatch {
 impl PyRecordBatch {
     #[new]
     fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
-        let reader = StreamReader::try_new(py_obj.as_bytes(), None).unwrap();
+        let reader = StreamReader::try_new(py_obj.as_bytes(), None).map_err(|e| py_datafusion_err(e))?;
         let mut batches: Vec<_> = reader.into_iter().map(|r| r.unwrap()).collect::<Vec<_>>();
         Ok(Self {
             batch: batches.pop().unwrap(),
