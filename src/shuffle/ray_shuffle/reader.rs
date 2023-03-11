@@ -106,7 +106,7 @@ impl ExecutionPlan for RayShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let map = self.input_partitions_map.read().unwrap();
+        let map = self.input_partitions_map.read().expect("got lock");
         let empty_input_objects = vec![];
         let input_objects = map.get(&partition).unwrap_or(&empty_input_objects);
         println!(
