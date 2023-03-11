@@ -117,7 +117,7 @@ impl ExecutionPlan for RayShuffleWriterExec {
                         batches.push(result?);
                     }
                     MemoryStream::try_new(
-                        vec![concat_batches(&schema, &batches).unwrap()],
+                        vec![concat_batches(&schema, &batches)?],
                         schema,
                         None,
                     )
@@ -151,10 +151,10 @@ impl ExecutionPlan for RayShuffleWriterExec {
                         "RayShuffleWriterExec[stage={}] finished processing stream with {rows} rows",
                         stage_id
                     );
-                    let result_batches: Vec<_> = writers
-                        .iter()
-                        .map(|batches| concat_batches(&schema, batches).unwrap())
-                        .collect();
+                    let mut result_batches = vec![];
+                    for batches in &writers {
+                        result_batches.push(concat_batches(&schema, batches)?);
+                    }
                     MemoryStream::try_new(result_batches, schema, None)
                 }
                 _ => unimplemented!(),
