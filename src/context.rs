@@ -18,7 +18,7 @@ use datafusion_proto::bytes::{
 use datafusion_python::physical_plan::PyExecutionPlan;
 use futures::StreamExt;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyList};
+use pyo3::types::{PyBytes, PyDict, PyList};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -131,21 +131,22 @@ fn _set_inputs_for_ray_shuffle_reader(
     py: Python,
 ) -> () {
     if let Some(reader_exec) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
+        let stage_id = reader_exec.stage_id;
         // iterate over inputs, wrap in PyBytes and set as input objects
-        let input_objects = inputs
-            .as_ref(py)
-            .iter()
-            .expect("expected iterable")
-            .map(|input| {
-                input
-                    .unwrap()
-                    .downcast::<PyBytes>()
-                    .unwrap()
-                    .as_bytes()
-                    .to_vec()
-            })
-            .collect();
-        reader_exec.set_input_objects(part, input_objects);
+        let input_partitions_map = inputs.as_ref(py).downcast::<PyDict>().unwrap();
+        match input_partitions_map.get_item(stage_id) {
+            Some(input_partitions) => {
+                let input_partitions = input_partitions.downcast::<PyList>().unwrap();
+                let input_objects = input_partitions
+                    .iter()
+                    .map(|input| input.downcast::<PyBytes>().unwrap().as_bytes().to_vec())
+                    .collect();
+                reader_exec.set_input_partitions(part, input_objects);
+            }
+            None => {
+                println!("Warning: No input partitions for stage {}", stage_id);
+            }
+        };
     } else {
         for child in plan.children() {
             _set_inputs_for_ray_shuffle_reader(child, part, inputs, py);
