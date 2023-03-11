@@ -35,4 +35,5 @@ class Worker:
         # (perhaps via Substrait, once DataFusion supports converting a physical plan to Substrait)
         result_set = self.ctx.execute_partition(plan, part, input_partitions_map)
 
-        return result_set.tobyteslist()
+        ret = result_set.tobyteslist()
+        return ret[0] if len(ret) == 1 else ret

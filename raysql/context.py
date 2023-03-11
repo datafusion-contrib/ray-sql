@@ -64,7 +64,7 @@ def execute_query_stage(
     # if we are using disk-based shuffle, wait until the child stages to finish
     # writing the shuffle files to disk first.
     if not use_ray_shuffle:
-        ray.get([f for lst in child_outputs for f in lst])
+        ray.get([f for _, lst in child_outputs for f in lst])
 
     # round-robin allocation across workers
     plan_bytes = serialize_execution_plan(stage.get_execution_plan())
@@ -113,5 +113,4 @@ class RaySqlContext:
         _, partitions = ray.get(future)
         # TODO(@lsf): we only support a single output partition for now?
         result = ray.get(partitions[0])
-        # TODO(@lsf) is the following [0] necessary?
-        return ResultSet(result[0])
+        return result
