@@ -1,6 +1,6 @@
-use crate::shuffle::{ShuffleCodec, ShuffleReaderExec};
+use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec, ShuffleReaderExec};
 use datafusion::error::Result;
-use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::{ExecutionPlan, Partitioning};
 use datafusion::prelude::SessionContext;
 use datafusion_proto::bytes::physical_plan_from_bytes_with_extension_codec;
 use datafusion_python::physical_plan::PyExecutionPlan;
@@ -47,7 +47,13 @@ impl PyQueryStage {
     }
 
     pub fn get_output_partition_count(&self) -> usize {
-        self.stage.plan.output_partitioning().partition_count()
+        match self.stage.plan.output_partitioning() {
+            Partitioning::UnknownPartitioning(_) => {
+                println!("UnknownPartitioning returning 1");
+                1
+            }
+            p => p.partition_count(),
+        }
     }
 }
 
@@ -71,16 +77,27 @@ impl QueryStage {
     /// Get the input partition count. This is the same as the number of concurrent tasks
     /// when we schedule this query stage for execution
     pub fn get_input_partition_count(&self) -> usize {
-        self.plan.children()[0].output_partitioning().partition_count()
+        self.plan.children()[0]
+            .output_partitioning()
+            .partition_count()
     }
 
     pub fn get_output_partition_count(&self) -> usize {
-        self.plan.output_partitioning().partition_count()
+        // TODO(@lsf) UnknownPartitioning should return 1?
+        match self.plan.output_partitioning() {
+            Partitioning::UnknownPartitioning(_) => {
+                println!("UnknownPartitioning returning 1");
+                1
+            }
+            p => p.partition_count(),
+        }
     }
 }
 
 fn collect_child_stage_ids(plan: &dyn ExecutionPlan, ids: &mut Vec<usize>) {
     if let Some(shuffle_reader) = plan.as_any().downcast_ref::<ShuffleReaderExec>() {
+        ids.push(shuffle_reader.stage_id);
+    } else if let Some(shuffle_reader) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
         ids.push(shuffle_reader.stage_id);
     } else {
         for child_plan in plan.children() {

@@ -1,5 +1,6 @@
 use crate::query_stage::PyQueryStage;
 use crate::query_stage::QueryStage;
+use crate::shuffle::{RayShuffleReaderExec, RayShuffleWriterExec};
 use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
 use datafusion::error::Result;
 use datafusion::physical_plan::coalesce_partitions::CoalescePartitionsExec;
@@ -96,9 +97,12 @@ impl ExecutionGraph {
     }
 }
 
-pub fn make_execution_graph(plan: Arc<dyn ExecutionPlan>) -> Result<ExecutionGraph> {
+pub fn make_execution_graph(
+    plan: Arc<dyn ExecutionPlan>,
+    use_ray_shuffle: bool,
+) -> Result<ExecutionGraph> {
     let mut graph = ExecutionGraph::new();
-    let root = generate_query_stages(plan, &mut graph)?;
+    let root = generate_query_stages(plan, &mut graph, use_ray_shuffle)?;
     graph.add_query_stage(graph.next_id(), root);
     Ok(graph)
 }
@@ -108,12 +112,13 @@ pub fn make_execution_graph(plan: Arc<dyn ExecutionPlan>) -> Result<ExecutionGra
 fn generate_query_stages(
     plan: Arc<dyn ExecutionPlan>,
     graph: &mut ExecutionGraph,
+    use_ray_shuffle: bool,
 ) -> Result<Arc<dyn ExecutionPlan>> {
     // recurse down first
     let new_children: Vec<Arc<dyn ExecutionPlan>> = plan
         .children()
         .iter()
-        .map(|x| generate_query_stages(x.clone(), graph))
+        .map(|x| generate_query_stages(x.clone(), graph, use_ray_shuffle))
         .collect::<Result<Vec<_>>>()?;
     let plan = with_new_children_if_necessary(plan, new_children)?;
 
@@ -130,6 +135,7 @@ fn generate_query_stages(
                 plan.children()[0].clone(),
                 graph,
                 partitioning_scheme.clone(),
+                use_ray_shuffle,
             ),
         }
     } else if plan
@@ -139,7 +145,8 @@ fn generate_query_stages(
     {
         let coalesce_input = plan.children()[0].clone();
         let partitioning_scheme = coalesce_input.output_partitioning();
-        let new_input = create_shuffle_exchange(coalesce_input, graph, partitioning_scheme)?;
+        let new_input =
+            create_shuffle_exchange(coalesce_input, graph, partitioning_scheme, use_ray_shuffle)?;
         with_new_children_if_necessary(plan, vec![new_input])
     } else if plan
         .as_any()
@@ -148,7 +155,12 @@ fn generate_query_stages(
     {
         let partitioned_sort_plan = plan.children()[0].clone();
         let partitioning_scheme = partitioned_sort_plan.output_partitioning();
-        let new_input = create_shuffle_exchange(partitioned_sort_plan, graph, partitioning_scheme)?;
+        let new_input = create_shuffle_exchange(
+            partitioned_sort_plan,
+            graph,
+            partitioning_scheme,
+            use_ray_shuffle,
+        )?;
         with_new_children_if_necessary(plan, vec![new_input])
     } else {
         Ok(plan)
@@ -171,6 +183,7 @@ fn create_shuffle_exchange(
     plan: Arc<dyn ExecutionPlan>,
     graph: &mut ExecutionGraph,
     partitioning_scheme: Partitioning,
+    use_ray_shuffle: bool,
 ) -> Result<Arc<dyn ExecutionPlan>> {
     // introduce shuffle to produce one output partition
     let stage_id = graph.next_id();
@@ -179,26 +192,42 @@ fn create_shuffle_exchange(
     let temp_dir = create_temp_dir(stage_id)?;
 
     let shuffle_writer_input = plan.clone();
-    let shuffle_writer = ShuffleWriterExec::new(
-        stage_id,
-        shuffle_writer_input,
-        partitioning_scheme.clone(),
-        &temp_dir,
-    );
+    let shuffle_writer: Arc<dyn ExecutionPlan> = if use_ray_shuffle {
+        Arc::new(RayShuffleWriterExec::new(
+            stage_id,
+            shuffle_writer_input,
+            partitioning_scheme.clone(),
+        ))
+    } else {
+        Arc::new(ShuffleWriterExec::new(
+            stage_id,
+            shuffle_writer_input,
+            partitioning_scheme.clone(),
+            &temp_dir,
+        ))
+    };
 
     debug!(
         "Created shuffle writer with output partitioning {:?}",
         shuffle_writer.output_partitioning()
     );
 
-    let stage_id = graph.add_query_stage(stage_id, Arc::new(shuffle_writer));
+    let stage_id = graph.add_query_stage(stage_id, shuffle_writer);
     // replace the plan with a shuffle reader
-    Ok(Arc::new(ShuffleReaderExec::new(
-        stage_id,
-        plan.schema(),
-        partitioning_scheme,
-        &temp_dir,
-    )))
+    if use_ray_shuffle {
+        Ok(Arc::new(RayShuffleReaderExec::new(
+            stage_id,
+            plan.schema(),
+            partitioning_scheme,
+        )))
+    } else {
+        Ok(Arc::new(ShuffleReaderExec::new(
+            stage_id,
+            plan.schema(),
+            partitioning_scheme,
+            &temp_dir,
+        )))
+    }
 }
 
 fn create_temp_dir(stage_id: usize) -> Result<String> {
@@ -365,7 +394,7 @@ mod test {
         ));
 
         output.push_str("RaySQL Plan\n===========\n\n");
-        let graph = make_execution_graph(plan)?;
+        let graph = make_execution_graph(plan, false)?;
         for id in 0..=graph.get_final_query_stage().id {
             let query_stage = graph.query_stages.get(&id).unwrap();
             output.push_str(&format!(

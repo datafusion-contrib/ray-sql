@@ -1,6 +1,11 @@
 use crate::protobuf::ray_sql_exec_node::PlanType;
-use crate::protobuf::{RaySqlExecNode, ShuffleReaderExecNode, ShuffleWriterExecNode};
-use crate::shuffle::{ShuffleReaderExec, ShuffleWriterExec};
+use crate::protobuf::{
+    RayShuffleReaderExecNode, RayShuffleWriterExecNode, RaySqlExecNode, ShuffleReaderExecNode,
+    ShuffleWriterExecNode,
+};
+use crate::shuffle::{
+    RayShuffleReaderExec, RayShuffleWriterExec, ShuffleReaderExec, ShuffleWriterExec,
+};
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::common::{DataFusionError, Result};
 use datafusion::execution::runtime_env::RuntimeEnv;
@@ -63,6 +68,37 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                     &writer.shuffle_dir,
                 )))
             }
+            Some(PlanType::RayShuffleReader(reader)) => {
+                let schema = reader.schema.as_ref().unwrap();
+                let schema: SchemaRef = Arc::new(schema.try_into().unwrap());
+                let hash_part = parse_protobuf_hash_partitioning(
+                    reader.partitioning.as_ref(),
+                    registry,
+                    &schema,
+                )?;
+                Ok(Arc::new(RayShuffleReaderExec::new(
+                    reader.stage_id as usize,
+                    schema,
+                    hash_part.unwrap(),
+                )))
+            }
+            Some(PlanType::RayShuffleWriter(writer)) => {
+                let plan = writer.plan.unwrap().try_into_physical_plan(
+                    registry,
+                    &RuntimeEnv::default(),
+                    self,
+                )?;
+                let hash_part = parse_protobuf_hash_partitioning(
+                    writer.partitioning.as_ref(),
+                    registry,
+                    plan.schema().as_ref(),
+                )?;
+                Ok(Arc::new(RayShuffleWriterExec::new(
+                    writer.stage_id as usize,
+                    plan,
+                    hash_part.unwrap(),
+                )))
+            }
             _ => unreachable!(),
         }
     }
@@ -92,6 +128,24 @@ impl PhysicalExtensionCodec for ShuffleCodec {
                 shuffle_dir: writer.shuffle_dir.clone(),
             };
             PlanType::ShuffleWriter(writer)
+        } else if let Some(reader) = node.as_any().downcast_ref::<RayShuffleReaderExec>() {
+            let schema: protobuf::Schema = reader.schema().try_into().unwrap();
+            let partitioning = encode_partitioning_scheme(&reader.output_partitioning())?;
+            let reader = RayShuffleReaderExecNode {
+                stage_id: reader.stage_id as u32,
+                schema: Some(schema),
+                partitioning: Some(partitioning),
+            };
+            PlanType::RayShuffleReader(reader)
+        } else if let Some(writer) = node.as_any().downcast_ref::<RayShuffleWriterExec>() {
+            let plan = PhysicalPlanNode::try_from_physical_plan(writer.plan.clone(), self)?;
+            let partitioning = encode_partitioning_scheme(&writer.output_partitioning())?;
+            let writer = RayShuffleWriterExecNode {
+                stage_id: writer.stage_id as u32,
+                plan: Some(plan),
+                partitioning: Some(partitioning),
+            };
+            PlanType::RayShuffleWriter(writer)
         } else {
             unreachable!()
         };
