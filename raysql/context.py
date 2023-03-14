@@ -31,6 +31,7 @@ def execute_query_stage(
     output_partitions_count = stage.get_output_partition_count()
     if output_partitions_count == 1:
         # reduce stage
+        print("Forcing reduce stage concurrency from {} to 1".format(concurrency))
         concurrency = 1
 
     print(
@@ -39,26 +40,24 @@ def execute_query_stage(
         )
     )
 
-    # Coordinate shuffle partitions
+    # A list of (stage ID, list of futures) for each child stage
+    # Each list is a 2-D array of (input partitions, output partitions).
     child_outputs = ray.get(child_futures)
 
-    def _get_worker_inputs(part: int) -> dict[int, list[ray.ObjectRef]]:
-        ret = {}
-        if not use_ray_shuffle:
-            return ret
-        return {c: get_child_inputs(part, lst) for c, lst in child_outputs}
-
-    def get_child_inputs(
-        part: int, inputs: list[list[ray.ObjectRef]]
-    ) -> list[ray.ObjectRef]:
+    def _get_worker_inputs(part: int) -> list[tuple[int, int, int, ray.ObjectRef]]:
         ret = []
-        for lst in inputs:
-            if isinstance(lst, list):
-                num_parts = len(lst)
-                parts_per_worker = num_parts // concurrency
-                ret.extend(lst[part * parts_per_worker : (part + 1) * parts_per_worker])
-            else:
-                ret.append(lst)
+        if not use_ray_shuffle:
+            return []
+        for child_stage_id, child_futures in child_outputs:
+            for i, lst in enumerate(child_futures):
+                if isinstance(lst, list):
+                    for j, f in enumerate(lst):
+                        if concurrency == 1 or j == part:
+                            # If concurrency is 1, pass in all shuffle partitions. Otherwise,
+                            # only pass in the partitions that match the current worker partition.
+                            ret.append((child_stage_id, i, j, f))
+                elif concurrency == 1 or part == 0:
+                    ret.append((child_stage_id, i, 0, lst))
         return ret
 
     # if we are using disk-based shuffle, wait until the child stages to finish

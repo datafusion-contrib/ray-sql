@@ -2,9 +2,11 @@ use datafusion::arrow::compute::concat_batches;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::{Result, Statistics};
+use datafusion::error::DataFusionError;
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
+use datafusion::physical_plan::common::batch_byte_size;
 use datafusion::physical_plan::memory::MemoryStream;
 use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
 use datafusion::physical_plan::repartition::BatchPartitioner;
@@ -112,22 +114,18 @@ impl ExecutionPlan for RayShuffleWriterExec {
             // TODO(@lsf): why can't I reference self in here?
             match &partitioning {
                 Partitioning::UnknownPartitioning(_) => {
-                    let mut batches: Vec<RecordBatch> = vec![];
+                    let mut writer = InMemoryWriter::new(schema.clone());
                     while let Some(result) = stream.next().await {
-                        batches.push(result?);
+                        writer.write(result?)?;
                     }
-                    MemoryStream::try_new(
-                        vec![concat_batches(&schema, &batches)?],
-                        schema,
-                        None,
-                    )
+                    MemoryStream::try_new(vec![writer.finish()?], schema, None)
                 }
                 Partitioning::Hash(_, _) => {
                     // TODO(@lsf) What happens if there are multiple RecordBatches
                     // assigned to the same writer?
-                    let mut writers: Vec<Vec<RecordBatch>> = vec![];
+                    let mut writers: Vec<InMemoryWriter> = vec![];
                     for _ in 0..partition_count {
-                        writers.push(vec![]);
+                        writers.push(InMemoryWriter::new(schema.clone()));
                     }
 
                     let mut partitioner =
@@ -138,23 +136,34 @@ impl ExecutionPlan for RayShuffleWriterExec {
                     while let Some(result) = stream.next().await {
                         let input_batch = result?;
                         rows += input_batch.num_rows();
+
+                        println!(
+                            "RayShuffleWriterExec[stage={}] writing batch output",
+                            stage_id
+                        );
+
                         partitioner.partition(input_batch, |output_partition, output_batch| {
-                            println!(
-                                "ShuffleWriterExec[stage={}] writing batch output (partition {})",
-                                stage_id, output_partition
-                            );
-                            writers[output_partition].push(output_batch);
-                            Ok(())
+                            writers[output_partition].write(output_batch)
                         })?;
+                    }
+                    let mut result_batches = vec![];
+                    for (i, w) in writers.iter_mut().enumerate() {
+                        if w.num_batches > 0 {
+                            println!(
+                                "RayShuffleWriterExec[stage={}] Finished writing shuffle partition {}. Batches: {}. Rows: {}. Bytes: {}.",
+                                stage_id,
+                                i,
+                                w.num_batches,
+                                w.num_rows,
+                                w.num_bytes
+                            );
+                        }
+                        result_batches.push(w.finish()?);
                     }
                     println!(
                         "RayShuffleWriterExec[stage={}] finished processing stream with {rows} rows",
                         stage_id
                     );
-                    let mut result_batches = vec![];
-                    for batches in &writers {
-                        result_batches.push(concat_batches(&schema, batches)?);
-                    }
                     MemoryStream::try_new(result_batches, schema, None)
                 }
                 _ => unimplemented!(),
@@ -168,5 +177,42 @@ impl ExecutionPlan for RayShuffleWriterExec {
 
     fn statistics(&self) -> Statistics {
         Statistics::default()
+    }
+}
+
+struct InMemoryWriter {
+    /// batches buffer
+    batches: Vec<RecordBatch>,
+    /// schema
+    schema: SchemaRef,
+    /// batches written
+    pub num_batches: u64,
+    /// rows written
+    pub num_rows: u64,
+    /// bytes written
+    pub num_bytes: u64,
+}
+
+impl InMemoryWriter {
+    fn new(schema: SchemaRef) -> Self {
+        Self {
+            batches: vec![],
+            schema: schema,
+            num_batches: 0,
+            num_rows: 0,
+            num_bytes: 0,
+        }
+    }
+
+    fn write(&mut self, batch: RecordBatch) -> Result<()> {
+        self.num_batches += 1;
+        self.num_rows += batch.num_rows() as u64;
+        self.num_bytes += batch_byte_size(&batch) as u64;
+        self.batches.push(batch);
+        Ok(())
+    }
+
+    fn finish(&self) -> Result<RecordBatch> {
+        concat_batches(&self.schema, &self.batches).map_err(DataFusionError::ArrowError)
     }
 }
