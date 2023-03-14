@@ -20,7 +20,7 @@ use datafusion_python::errors::py_datafusion_err;
 use datafusion_python::physical_plan::PyExecutionPlan;
 use futures::StreamExt;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyList};
+use pyo3::types::{PyBytes, PyList, PyLong, PyTuple};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -133,33 +133,40 @@ fn _set_inputs_for_ray_shuffle_reader(
     py: Python,
 ) -> Result<()> {
     if let Some(reader_exec) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
-        let stage_id = reader_exec.stage_id;
+        let exec_stage_id = reader_exec.stage_id;
         // iterate over inputs, wrap in PyBytes and set as input objects
-        let input_partitions_map = inputs
+        let input_partitions = inputs
             .as_ref(py)
-            .downcast::<PyDict>()
+            .downcast::<PyList>()
             .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
-        match input_partitions_map.get_item(stage_id) {
-            Some(input_partitions) => {
-                let input_partitions = input_partitions
-                    .downcast::<PyList>()
-                    .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
-                let input_objects = input_partitions
-                    .iter()
-                    .map(|input| {
-                        input
-                            .downcast::<PyBytes>()
-                            .expect("expected PyBytes")
-                            .as_bytes()
-                            .to_vec()
-                    })
-                    .collect();
-                reader_exec.set_input_partitions(part, input_objects)?;
+        for item in input_partitions.iter() {
+            let pytuple = item.downcast::<PyTuple>().unwrap();
+            let stage_id = pytuple
+                .get_item(0)
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
+                .downcast::<PyLong>()
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
+                .extract::<usize>()
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
+            if stage_id != exec_stage_id {
+                continue;
             }
-            None => {
-                println!("Warning: No input partitions for stage {}", stage_id);
-            }
-        };
+            let part = pytuple
+                .get_item(1)
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
+                .downcast::<PyLong>()
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
+                .extract::<usize>()
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
+            let bytes = pytuple
+                .get_item(2)
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
+                .downcast::<PyBytes>()
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
+                .as_bytes()
+                .to_vec();
+            reader_exec.add_input_partition(part, bytes)?;
+        }
     } else {
         for child in plan.children() {
             _set_inputs_for_ray_shuffle_reader(child, part, inputs, py)?;
@@ -170,7 +177,8 @@ fn _set_inputs_for_ray_shuffle_reader(
 
 impl PyContext {
     /// Execute a partition of a query plan. This will typically be executing a shuffle write and
-    /// write the results to disk, except for the final query stage, which will return the data
+    /// write the results to disk, except for the final query stage, which will return the data.
+    /// inputs is a list of tuples of (stage_id, partition_id, bytes) for each input partition.
     fn _execute_partition(
         &self,
         plan: PyExecutionPlan,
