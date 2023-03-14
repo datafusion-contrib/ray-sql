@@ -39,14 +39,15 @@ def execute_query_stage(
         )
     )
 
-    # Coordinate shuffle partitions
+    # A list of (stage ID, list of futures) for each child stage
+    # Each list is a 2-D array of (input partitions, output partitions).
     child_outputs = ray.get(child_futures)
 
     def _get_worker_inputs(part: int) -> dict[int, list[ray.ObjectRef]]:
         ret = {}
         if not use_ray_shuffle:
             return ret
-        return {c: get_child_inputs(part, lst) for c, lst in child_outputs}
+        return {c: get_child_inputs(part, outs) for c, outs in child_outputs}
 
     def get_child_inputs(
         part: int, inputs: list[list[ray.ObjectRef]]
@@ -54,10 +55,8 @@ def execute_query_stage(
         ret = []
         for lst in inputs:
             if isinstance(lst, list):
-                num_parts = len(lst)
-                parts_per_worker = num_parts // concurrency
-                ret.extend(lst[part * parts_per_worker : (part + 1) * parts_per_worker])
-            else:
+                ret.append(lst[part])
+            elif part == 0:
                 ret.append(lst)
         return ret
 

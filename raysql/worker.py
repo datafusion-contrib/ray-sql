@@ -19,11 +19,10 @@ class Worker:
 
         if self.debug:
             print(
-                "Worker executing plan {} partition #{} with {} shuffle inputs:\n{}".format(
+                "Worker executing plan {} partition #{} with {} shuffle inputs".format(
                     plan.display(),
                     part,
                     {i: len(parts) for i, parts in input_partitions_map.items()},
-                    plan.display_indent(),
                 )
             )
 
