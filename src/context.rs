@@ -140,7 +140,9 @@ fn _set_inputs_for_ray_shuffle_reader(
             .downcast::<PyList>()
             .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
         for item in input_partitions.iter() {
-            let pytuple = item.downcast::<PyTuple>().unwrap();
+            let pytuple = item
+                .downcast::<PyTuple>()
+                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
             let stage_id = pytuple
                 .get_item(0)
                 .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
