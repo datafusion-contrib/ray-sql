@@ -2,6 +2,7 @@ use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
+use datafusion::error::DataFusionError;
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
@@ -17,7 +18,6 @@ use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
-use datafusion::error::DataFusionError;
 
 type PartitionId = usize;
 type StageId = usize;
@@ -58,16 +58,18 @@ impl RayShuffleReaderExec {
         }
     }
 
-    pub fn set_input_partitions(&self, partition: PartitionId, input_partitions: Vec<Vec<u8>>) -> Result<(), DataFusionError> {
+    pub fn add_input_partition(
+        &self,
+        partition: PartitionId,
+        input_partition: Vec<u8>,
+    ) -> Result<(), DataFusionError> {
+        let mut map = self.input_partitions_map.write().unwrap();
+        let input_partitions = map.entry(partition).or_insert(vec![]);
+        input_partitions.push(input_partition);
         println!(
-            "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) is set with {} shuffle inputs",
+            "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) adding shuffle input",
             self.stage_id,
-            input_partitions.len(),
         );
-        self.input_partitions_map
-            .write()
-            .unwrap()
-            .insert(partition, input_partitions);
         Ok(())
     }
 }

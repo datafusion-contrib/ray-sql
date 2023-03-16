@@ -43,10 +43,30 @@ def load_query(n: int) -> str:
 def tpchq(ctx: RaySqlContext, q: int = 14):
     sql = load_query(q)
     result_set = ray.get(ctx.sql.remote(sql))
-    print("Result:")
-    print(ResultSet(result_set))
+    return result_set
 
 
-use_ray_shuffle = False
-ctx = setup_context(use_ray_shuffle)
-tpchq(ctx)
+def compare(q: int):
+    ctx = setup_context(False)
+    result_set_truth = tpchq(ctx, q)
+
+    ctx = setup_context(True)
+    result_set_ray = tpchq(ctx, q)
+
+    assert result_set_truth == result_set_ray, (
+        q,
+        ResultSet(result_set_truth),
+        ResultSet(result_set_ray),
+    )
+
+
+# use_ray_shuffle = True
+# ctx = setup_context(use_ray_shuffle)
+# result_set = tpchq(ctx, 1)
+# print("Result:")
+# print(ResultSet(result_set))
+
+for i in range(1, 22 + 1):
+    if i == 15:
+        continue
+    compare(i)
