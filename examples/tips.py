@@ -9,7 +9,7 @@ ray.init()
 workers = [Worker.remote() for i in range(2)]
 
 # create a remote context and register a table
-ctx = RaySqlContext.remote(workers)
+ctx = RaySqlContext.remote(workers, use_ray_shuffle = True)
 ray.get(ctx.register_csv.remote('tips', 'tips.csv', True))
 
 # Parquet is also supported

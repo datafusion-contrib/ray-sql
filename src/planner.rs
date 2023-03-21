@@ -103,7 +103,13 @@ pub fn make_execution_graph(
 ) -> Result<ExecutionGraph> {
     let mut graph = ExecutionGraph::new();
     let root = generate_query_stages(plan, &mut graph, use_ray_shuffle)?;
-    graph.add_query_stage(graph.next_id(), root);
+    // ensure that the final stage produces a single partition
+    if root.output_partitioning().partition_count() > 1 {
+        let root = Arc::new(CoalescePartitionsExec::new(root));
+        graph.add_query_stage(graph.next_id(), root);
+    } else {
+        graph.add_query_stage(graph.next_id(), root);
+    }
     Ok(graph)
 }
 
