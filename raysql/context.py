@@ -84,7 +84,7 @@ def execute_query_stage(
 
 @ray.remote
 class RaySqlContext:
-    def __init__(self, workers: list[Worker], use_ray_shuffle: bool):
+    def __init__(self, workers: list[Worker], use_ray_shuffle: bool = False):
         self.ctx = Context(len(workers), use_ray_shuffle)
         self.workers = workers
         self.use_ray_shuffle = use_ray_shuffle
@@ -110,6 +110,5 @@ class RaySqlContext:
             query_stages, final_stage_id, self.workers, self.use_ray_shuffle
         )
         _, partitions = ray.get(future)
-        # TODO(@lsf): we only support a single output partition for now?
-        result = ray.get(partitions[0])
-        return result
+        result_set = ray.get(partitions)
+        return result_set
