@@ -66,10 +66,6 @@ impl RayShuffleReaderExec {
         let mut map = self.input_partitions_map.write().unwrap();
         let input_partitions = map.entry(partition).or_insert(vec![]);
         input_partitions.push(input_partition);
-        println!(
-            "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) adding shuffle input",
-            self.stage_id,
-        );
         Ok(())
     }
 }
