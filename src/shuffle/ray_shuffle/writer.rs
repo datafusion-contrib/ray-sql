@@ -16,6 +16,7 @@ use datafusion::physical_plan::{
 };
 use futures::StreamExt;
 use futures::TryStreamExt;
+use log::debug;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -136,12 +137,6 @@ impl ExecutionPlan for RayShuffleWriterExec {
                     while let Some(result) = stream.next().await {
                         let input_batch = result?;
                         rows += input_batch.num_rows();
-
-                        println!(
-                            "RayShuffleWriterExec[stage={}] writing batch output",
-                            stage_id
-                        );
-
                         partitioner.partition(input_batch, |output_partition, output_batch| {
                             writers[output_partition].write(output_batch)
                         })?;
@@ -149,7 +144,7 @@ impl ExecutionPlan for RayShuffleWriterExec {
                     let mut result_batches = vec![];
                     for (i, w) in writers.iter_mut().enumerate() {
                         if w.num_batches > 0 {
-                            println!(
+                            debug!(
                                 "RayShuffleWriterExec[stage={}] Finished writing shuffle partition {}. Batches: {}. Rows: {}. Bytes: {}.",
                                 stage_id,
                                 i,
@@ -160,7 +155,7 @@ impl ExecutionPlan for RayShuffleWriterExec {
                         }
                         result_batches.push(w.finish()?);
                     }
-                    println!(
+                    debug!(
                         "RayShuffleWriterExec[stage={}] finished processing stream with {rows} rows",
                         stage_id
                     );
