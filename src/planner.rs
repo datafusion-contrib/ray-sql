@@ -103,7 +103,14 @@ pub fn make_execution_graph(
 ) -> Result<ExecutionGraph> {
     let mut graph = ExecutionGraph::new();
     let root = generate_query_stages(plan, &mut graph, use_ray_shuffle)?;
-    graph.add_query_stage(graph.next_id(), root);
+    // We force the final stage to produce a single partition to return
+    // to the driver. This might not suit ETL workloads.
+    if root.output_partitioning().partition_count() > 1 {
+        let root = Arc::new(CoalescePartitionsExec::new(root));
+        graph.add_query_stage(graph.next_id(), root);
+    } else {
+        graph.add_query_stage(graph.next_id(), root);
+    }
     Ok(graph)
 }
 

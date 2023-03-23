@@ -9,11 +9,10 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 # Start a local cluster
 ray.init(resources={"worker": 1})
 
-# create a context and register a table
-ctx = RaySqlContext(2)
-# ctx.register_csv("tips", "tips.parquet", True)
-
-# Parquet is also supported
+# Create a context and register a table
+ctx = RaySqlContext(2, use_ray_shuffle=True)
+# Register either a CSV or Parquet file
+# ctx.register_csv("tips", f"{SCRIPT_DIR}/tips.csv", True)
 ctx.register_parquet("tips", f"{SCRIPT_DIR}/tips.parquet")
 
 result_set = ctx.sql(

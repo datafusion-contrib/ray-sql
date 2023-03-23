@@ -40,10 +40,12 @@ def tpch_query(ctx: RaySqlContext, q: int = 1):
     return result_set
 
 
-def tpch_timing(ctx: RaySqlContext, q: int = 1):
+def tpch_timing(ctx: RaySqlContext, q: int = 1, print_result: bool = False):
     sql = load_query(q)
     start = time.perf_counter()
-    ctx.sql(sql)
+    result = ctx.sql(sql)
+    if print_result:
+        print(ResultSet(result))
     end = time.perf_counter()
     return end - start
 

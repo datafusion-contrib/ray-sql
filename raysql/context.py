@@ -67,7 +67,7 @@ def execute_query_stage(
     if not use_ray_shuffle:
         ray.get([f for _, lst in child_outputs for f in lst])
 
-    # round-robin allocation across workers
+    # schedule the actual execution workers
     plan_bytes = raysql.serialize_execution_plan(stage.get_execution_plan())
     futures = []
     opt = {}
@@ -141,5 +141,7 @@ class RaySqlContext:
             query_stages, final_stage_id, self.num_workers, self.use_ray_shuffle
         )
         _, partitions = ray.get(future)
-        result_set = ray.get(partitions)
+        # final stage should have a concurrency of 1
+        assert len(partitions) == 1, partitions
+        result_set = ray.get(partitions[0])
         return result_set
