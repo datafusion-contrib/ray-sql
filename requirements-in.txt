@@ -6,6 +6,6 @@ mypy
 numpy
 pyarrow
 pytest
-ray
+ray==2.3.0
 toml
 importlib_metadata; python_version < "3.8"

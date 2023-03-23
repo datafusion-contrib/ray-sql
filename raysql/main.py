@@ -6,7 +6,7 @@ from raysql import RaySqlContext, ResultSet
 
 NUM_CPUS_PER_WORKER = 8
 
-SF = 1
+SF = 10
 DATA_DIR = f"/mnt/data0/tpch/sf{SF}-parquet"
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 QUERIES_DIR = os.path.join(SCRIPT_DIR, f"../sqlbench-h/queries/sf={SF}")
@@ -64,13 +64,10 @@ def compare(q: int):
 
 def tpch_bench():
     ray.init("auto")
-    num_workers = int(ray.cluster_resources().get("worker")) * NUM_CPUS_PER_WORKER
-    # num_workers = int(ray.cluster_resources().get("worker")) * 2
+    num_workers = int(ray.cluster_resources().get("worker", 1)) * NUM_CPUS_PER_WORKER
     ctx = setup_context(True, num_workers)
-    tpch_timing(ctx, 2)
-    exit(0)
     run_id = time.strftime("%Y-%m-%d-%H-%M-%S")
-    with open(f"results-{run_id}.csv", "w") as fout:
+    with open(f"results-sf{SF}-{run_id}.csv", "w") as fout:
         for i in range(1, 22 + 1):
             if i == 15:
                 continue
