@@ -104,9 +104,8 @@ impl ExecutionPlan for RayShuffleReaderExec {
         partition: usize,
         _context: Arc<TaskContext>,
     ) -> datafusion::common::Result<SendableRecordBatchStream> {
-        let map = self.input_partitions_map.read().expect("got lock");
-        let empty_input_objects = vec![];
-        let input_objects = map.get(&partition).unwrap_or(&empty_input_objects);
+        let mut map = self.input_partitions_map.write().expect("got lock");
+        let input_objects = map.remove(&partition).unwrap_or(vec![]);
         println!(
             "RayShuffleReaderExec[stage={}].execute(input_partition={partition}) with {} shuffle inputs",
             self.stage_id,
@@ -114,7 +113,9 @@ impl ExecutionPlan for RayShuffleReaderExec {
         );
         let mut streams = vec![];
         for input in input_objects {
-            streams.push(Box::pin(InMemoryShuffleStream::try_new(input)?) as SendableRecordBatchStream);
+            streams.push(
+                Box::pin(InMemoryShuffleStream::try_new(input)?) as SendableRecordBatchStream
+            );
         }
         Ok(Box::pin(CombinedRecordBatchStream::new(
             self.schema.clone(),
@@ -140,8 +141,8 @@ struct InMemoryShuffleStream {
 }
 
 impl InMemoryShuffleStream {
-    fn try_new(bytes: &Vec<u8>) -> Result<Self, DataFusionError> {
-        let reader = StreamReader::try_new(Cursor::new(bytes.clone()), None)?;
+    fn try_new(bytes: Vec<u8>) -> Result<Self, DataFusionError> {
+        let reader = StreamReader::try_new(Cursor::new(bytes), None)?;
         Ok(Self { reader })
     }
 }

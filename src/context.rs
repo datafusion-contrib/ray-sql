@@ -136,16 +136,11 @@ pub fn deserialize_execution_plan(bytes: Vec<u8>) -> PyResult<PyExecutionPlan> {
 fn _set_inputs_for_ray_shuffle_reader(
     plan: Arc<dyn ExecutionPlan>,
     part: usize,
-    inputs: &PyObject,
-    py: Python,
+    input_partitions: &PyList,
 ) -> Result<()> {
     if let Some(reader_exec) = plan.as_any().downcast_ref::<RayShuffleReaderExec>() {
         let exec_stage_id = reader_exec.stage_id;
         // iterate over inputs, wrap in PyBytes and set as input objects
-        let input_partitions = inputs
-            .as_ref(py)
-            .downcast::<PyList>()
-            .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
         for item in input_partitions.iter() {
             let pytuple = item
                 .downcast::<PyTuple>()
@@ -173,12 +168,12 @@ fn _set_inputs_for_ray_shuffle_reader(
                 .downcast::<PyBytes>()
                 .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
                 .as_bytes()
-                .to_vec();
+                .to_vec(); // TODO(@lsf) avoid copy here
             reader_exec.add_input_partition(part, bytes)?;
         }
     } else {
         for child in plan.children() {
-            _set_inputs_for_ray_shuffle_reader(child, part, inputs, py)?;
+            _set_inputs_for_ray_shuffle_reader(child, part, input_partitions)?;
         }
     }
     Ok(())
@@ -202,7 +197,11 @@ fn _execute_partition(
         Extensions::default(),
     )?);
     Python::with_gil(|py| {
-        _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
+        let input_partitions = inputs
+            .as_ref(py)
+            .downcast::<PyList>()
+            .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
+        _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &input_partitions)
     })?;
 
     // create a Tokio runtime to run the async code

@@ -144,7 +144,7 @@ impl ExecutionPlan for RayShuffleWriterExec {
                     let mut result_batches = vec![];
                     for (i, w) in writers.iter_mut().enumerate() {
                         if w.num_batches > 0 {
-                            debug!(
+                            println!(
                                 "RayShuffleWriterExec[stage={}] Finished writing shuffle partition {}. Batches: {}. Rows: {}. Bytes: {}.",
                                 stage_id,
                                 i,
