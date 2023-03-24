@@ -101,14 +101,18 @@ impl PyContext {
         part: usize,
         inputs: PyObject,
     ) -> PyResultSet {
-        let batches = self
-            ._execute_partition(plan, part, inputs)
-            .unwrap()
-            .iter()
-            .map(|batch| PyRecordBatch::new(batch.clone())) // TODO(@lsf): avoid clone?
-            .collect();
-        PyResultSet::new(batches)
+        execute_partition(plan, part, inputs)
     }
+}
+
+#[pyfunction]
+pub fn execute_partition(plan: PyExecutionPlan, part: usize, inputs: PyObject) -> PyResultSet {
+    let batches = _execute_partition(plan, part, inputs)
+        .unwrap()
+        .iter()
+        .map(|batch| PyRecordBatch::new(batch.clone())) // TODO(@lsf): avoid clone?
+        .collect();
+    PyResultSet::new(batches)
 }
 
 #[pyfunction]
@@ -178,45 +182,42 @@ fn _set_inputs_for_ray_shuffle_reader(
     Ok(())
 }
 
-impl PyContext {
-    /// Execute a partition of a query plan. This will typically be executing a shuffle write and
-    /// write the results to disk, except for the final query stage, which will return the data.
-    /// inputs is a list of tuples of (stage_id, partition_id, bytes) for each input partition.
-    fn _execute_partition(
-        &self,
-        plan: PyExecutionPlan,
-        part: usize,
-        inputs: PyObject,
-    ) -> Result<Vec<RecordBatch>> {
-        let ctx = Arc::new(TaskContext::try_new(
-            "task_id".to_string(),
-            "session_id".to_string(),
-            HashMap::new(),
-            HashMap::new(),
-            HashMap::new(),
-            Arc::new(RuntimeEnv::default()),
-            Extensions::default(),
-        )?);
-        Python::with_gil(|py| {
-            _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
-        })?;
+/// Execute a partition of a query plan. This will typically be executing a shuffle write and
+/// write the results to disk, except for the final query stage, which will return the data.
+/// inputs is a list of tuples of (stage_id, partition_id, bytes) for each input partition.
+fn _execute_partition(
+    plan: PyExecutionPlan,
+    part: usize,
+    inputs: PyObject,
+) -> Result<Vec<RecordBatch>> {
+    let ctx = Arc::new(TaskContext::try_new(
+        "task_id".to_string(),
+        "session_id".to_string(),
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+        Arc::new(RuntimeEnv::default()),
+        Extensions::default()
+    )?);
+    Python::with_gil(|py| {
+        _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
+    })?;
 
-        // create a Tokio runtime to run the async code
-        let rt = Runtime::new().unwrap();
+    // create a Tokio runtime to run the async code
+    let rt = Runtime::new().unwrap();
 
-        let fut: JoinHandle<Result<Vec<RecordBatch>>> = rt.spawn(async move {
-            let mut stream = plan.plan.execute(part, ctx)?;
-            let mut results = vec![];
-            while let Some(result) = stream.next().await {
-                results.push(result?);
-            }
-            Ok(results)
-        });
-
-        // block and wait on future
-        let results = rt.block_on(fut).unwrap()?;
+    let fut: JoinHandle<Result<Vec<RecordBatch>>> = rt.spawn(async move {
+        let mut stream = plan.plan.execute(part, ctx)?;
+        let mut results = vec![];
+        while let Some(result) = stream.next().await {
+            results.push(result?);
+        }
         Ok(results)
-    }
+    });
+
+    // block and wait on future
+    let results = rt.block_on(fut).unwrap()?;
+    Ok(results)
 }
 
 #[pyclass(name = "ResultSet", module = "raysql", subclass)]

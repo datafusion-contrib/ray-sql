@@ -1,24 +1,20 @@
+import time
 import os
 
 import ray
-from raysql import ResultSet
-from raysql.context import RaySqlContext
-from raysql.worker import Worker
+from raysql import RaySqlContext, ResultSet
 
-DATA_DIR = "/home/ubuntu/tpch/sf1-parquet"
-# DATA_DIR = "/home/ubuntu/sf10-parquet"
+NUM_CPUS_PER_WORKER = 8
 
-ray.init()
-# ray.init(local_mode=True)
+SF = 10
+DATA_DIR = f"/mnt/data0/tpch/sf{SF}-parquet"
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+QUERIES_DIR = os.path.join(SCRIPT_DIR, f"../sqlbench-h/queries/sf={SF}")
 
 
-def setup_context(use_ray_shuffle: bool) -> RaySqlContext:
-    num_workers = 2
-    # num_workers = os.cpu_count()
-    workers = [Worker.remote() for _ in range(num_workers)]
-    ctx = RaySqlContext.remote(workers, use_ray_shuffle)
-    register_tasks = []
-    register_tasks.append(ctx.register_csv.remote("tips", "examples/tips.csv", True))
+def setup_context(use_ray_shuffle: bool, num_workers: int = 2) -> RaySqlContext:
+    print(f"Using {num_workers} workers")
+    ctx = RaySqlContext(num_workers, use_ray_shuffle)
     for table in [
         "customer",
         "lineitem",
@@ -29,29 +25,37 @@ def setup_context(use_ray_shuffle: bool) -> RaySqlContext:
         "region",
         "supplier",
     ]:
-        register_tasks.append(
-            ctx.register_parquet.remote(table, f"{DATA_DIR}/{table}.parquet")
-        )
+        ctx.register_parquet(table, f"{DATA_DIR}/{table}.parquet")
     return ctx
 
 
 def load_query(n: int) -> str:
-    with open(f"testdata/queries/q{n}.sql") as fin:
+    with open(f"{QUERIES_DIR}/q{n}.sql") as fin:
         return fin.read()
 
 
-def tpchq(ctx: RaySqlContext, q: int = 14):
+def tpch_query(ctx: RaySqlContext, q: int = 1):
     sql = load_query(q)
-    result_set = ray.get(ctx.sql.remote(sql))
+    result_set = ctx.sql(sql)
     return result_set
+
+
+def tpch_timing(ctx: RaySqlContext, q: int = 1, print_result: bool = False):
+    sql = load_query(q)
+    start = time.perf_counter()
+    result = ctx.sql(sql)
+    if print_result:
+        print(ResultSet(result))
+    end = time.perf_counter()
+    return end - start
 
 
 def compare(q: int):
     ctx = setup_context(False)
-    result_set_truth = tpchq(ctx, q)
+    result_set_truth = tpch_query(ctx, q)
 
     ctx = setup_context(True)
-    result_set_ray = tpchq(ctx, q)
+    result_set_ray = tpch_query(ctx, q)
 
     assert result_set_truth == result_set_ray, (
         q,
@@ -60,13 +64,18 @@ def compare(q: int):
     )
 
 
-# use_ray_shuffle = True
-# ctx = setup_context(use_ray_shuffle)
-# result_set = tpchq(ctx, 1)
-# print("Result:")
-# print(ResultSet(result_set))
+def tpch_bench():
+    ray.init("auto")
+    num_workers = int(ray.cluster_resources().get("worker", 1)) * NUM_CPUS_PER_WORKER
+    ctx = setup_context(True, num_workers)
+    run_id = time.strftime("%Y-%m-%d-%H-%M-%S")
+    with open(f"results-sf{SF}-{run_id}.csv", "w") as fout:
+        for i in range(1, 22 + 1):
+            if i == 15:
+                continue
+            result = tpch_timing(ctx, i)
+            print(f"query,{i},{result}")
+            print(f"query,{i},{result}", file=fout, flush=True)
 
-for i in range(1, 22 + 1):
-    if i == 15:
-        continue
-    compare(i)
+
+tpch_bench()
