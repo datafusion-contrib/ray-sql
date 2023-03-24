@@ -56,7 +56,7 @@ impl ShuffleWriterExec {
                         .collect(),
                     n,
                 )
-            },
+            }
             _ => partitioning,
         };
 

@@ -147,11 +147,11 @@ impl InMemoryShuffleStream {
 }
 
 impl Stream for InMemoryShuffleStream {
-    type Item = datafusion::arrow::error::Result<RecordBatch>;
+    type Item = datafusion::error::Result<RecordBatch>;
 
     fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(batch) = self.reader.next() {
-            return Poll::Ready(Some(batch));
+            return Poll::Ready(Some(batch.map_err(|e| e.into())));
         }
         Poll::Ready(None)
     }

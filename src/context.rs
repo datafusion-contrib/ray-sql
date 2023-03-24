@@ -6,6 +6,7 @@ use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::ipc::writer::StreamWriter;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
+use datafusion::config::Extensions;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::disk_manager::DiskManagerConfig;
@@ -189,14 +190,15 @@ fn _execute_partition(
     part: usize,
     inputs: PyObject,
 ) -> Result<Vec<RecordBatch>> {
-    let ctx = Arc::new(TaskContext::new(
+    let ctx = Arc::new(TaskContext::try_new(
         "task_id".to_string(),
         "session_id".to_string(),
         HashMap::new(),
         HashMap::new(),
         HashMap::new(),
         Arc::new(RuntimeEnv::default()),
-    ));
+        Extensions::default()
+    )?);
     Python::with_gil(|py| {
         _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
     })?;
