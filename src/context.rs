@@ -48,7 +48,9 @@ impl PyContext {
         let mem_pool_size = 1024 * 1024 * 1024;
         let runtime_config = datafusion::execution::runtime_env::RuntimeConfig::new()
             .with_memory_pool(Arc::new(FairSpillPool::new(mem_pool_size)))
-            .with_disk_manager(DiskManagerConfig::new_specified(vec!["/tmp".into()]));
+            .with_disk_manager(DiskManagerConfig::new_specified(vec![
+                "/mnt/data0/tmp".into()
+            ]));
         let runtime = Arc::new(RuntimeEnv::new(runtime_config)?);
         let ctx = SessionContext::with_config_rt(config, runtime);
         Ok(Self {
@@ -109,8 +111,8 @@ impl PyContext {
 pub fn execute_partition(plan: PyExecutionPlan, part: usize, inputs: PyObject) -> PyResultSet {
     let batches = _execute_partition(plan, part, inputs)
         .unwrap()
-        .iter()
-        .map(|batch| PyRecordBatch::new(batch.clone())) // TODO(@lsf): avoid clone?
+        .into_iter()
+        .map(|batch| PyRecordBatch::new(batch))
         .collect();
     PyResultSet::new(batches)
 }
@@ -197,7 +199,7 @@ fn _execute_partition(
         HashMap::new(),
         HashMap::new(),
         Arc::new(RuntimeEnv::default()),
-        Extensions::default()
+        Extensions::default(),
     )?);
     Python::with_gil(|py| {
         _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
