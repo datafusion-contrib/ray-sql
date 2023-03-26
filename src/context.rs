@@ -75,6 +75,15 @@ impl PyContext {
         Ok(())
     }
 
+    /// Execute SQL directly against the DataFusion context. Useful for statements
+    /// such as "create view" or "drop view"
+    pub fn sql(&self, sql: &str, py: Python) -> PyResult<()> {
+        println!("Executing {}", sql);
+        let _df = wait_for_future(py, self.ctx.sql(sql))?;
+        Ok(())
+    }
+
+    /// Plan a distributed SELECT query for executing against the Ray workers
     pub fn plan(&self, sql: &str, py: Python) -> PyResult<PyExecutionGraph> {
         println!("Planning {}", sql);
         let df = wait_for_future(py, self.ctx.sql(sql))?;
@@ -197,7 +206,7 @@ fn _execute_partition(
         HashMap::new(),
         HashMap::new(),
         Arc::new(RuntimeEnv::default()),
-        Extensions::default()
+        Extensions::default(),
     )?);
     Python::with_gil(|py| {
         _set_inputs_for_ray_shuffle_reader(plan.plan.clone(), part, &inputs, py)
@@ -229,6 +238,14 @@ impl PyResultSet {
     fn new(batches: Vec<PyRecordBatch>) -> Self {
         Self { batches }
     }
+    fn empty() -> Self {
+        Self { batches: vec![] }
+    }
+}
+
+#[pyfunction]
+pub fn empty_result_set() -> PyResultSet {
+    PyResultSet::empty()
 }
 
 fn _read_pybytes(pyobj: &PyAny, batches: &mut Vec<PyRecordBatch>) -> PyResult<()> {

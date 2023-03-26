@@ -125,6 +125,12 @@ class RaySqlContext:
         self.ctx.register_parquet(table_name, path)
 
     def sql(self, sql: str) -> ResultSet:
+        # TODO we should parse sql and inspect the plan rather than
+        # perform a string comparison here
+        if 'create view' in sql or 'drop view' in sql:
+            self.ctx.sql(sql)
+            return raysql.empty_result_set()
+
         graph = self.ctx.plan(sql)
         final_stage_id = graph.get_final_query_stage().id()
 

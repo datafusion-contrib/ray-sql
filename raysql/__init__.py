@@ -10,6 +10,7 @@ from ._raysql_internal import (
     execute_partition,
     serialize_execution_plan,
     deserialize_execution_plan,
+    empty_result_set
 )
 from .context import RaySqlContext
 
