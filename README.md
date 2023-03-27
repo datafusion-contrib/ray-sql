@@ -42,7 +42,7 @@ print(result_set)
 
 ## Status
 
-- RaySQL can run 21 of the 22 TPC-H benchmark queries (query 15 needs DDL and that is not yet supported).
+- RaySQL can run all queries in the TPC-H benchmark
 
 ## Features
 
@@ -56,14 +56,12 @@ print(result_set)
 ## Performance
 
 This chart shows the performance of RaySQL compared to Apache Spark for
-[SQLBench-H](https://sqlbenchmarks.io/sqlbench-h/) at a very small data set (10GB), running on my desktop (Threadripper
+[SQLBench-H](https://sqlbenchmarks.io/sqlbench-h/) at a very small data set (10GB), running on a desktop (Threadripper
 with 24 physical cores). Both RaySQL and Spark are configured with 24 executors.
-
-Note that query 15 is excluded from both results since RaySQL does not support DDL yet.
 
 ### Overall Time
 
-RaySQL is ~65% faster overall for this scale factor and environment.
+RaySQL is ~1.9x faster overall for this scale factor and environment with disk-based shuffle.
 
 ![SQLBench-H Total](./docs/sqlbench-h-total.png)
 
