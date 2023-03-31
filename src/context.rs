@@ -46,9 +46,7 @@ impl PyContext {
         let mem_pool_size = 1024 * 1024 * 1024;
         let runtime_config = datafusion::execution::runtime_env::RuntimeConfig::new()
             .with_memory_pool(Arc::new(FairSpillPool::new(mem_pool_size)))
-            .with_disk_manager(DiskManagerConfig::new_specified(vec![
-                "/mnt/data0/tmp".into()
-            ]));
+            .with_disk_manager(DiskManagerConfig::new_specified(vec!["/tmp".into()]));
         let runtime = Arc::new(RuntimeEnv::new(runtime_config)?);
         let ctx = SessionContext::with_config_rt(config, runtime);
         Ok(Self {
