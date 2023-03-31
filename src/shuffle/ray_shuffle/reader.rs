@@ -1,5 +1,4 @@
 use datafusion::arrow::datatypes::SchemaRef;
-use datafusion::arrow::ipc::reader::StreamReader;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
 use datafusion::error::DataFusionError;
@@ -14,7 +13,6 @@ use futures::Stream;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Formatter;
-use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
@@ -31,7 +29,7 @@ pub struct RayShuffleReaderExec {
     /// Output partitioning
     partitioning: Partitioning,
     /// Input streams from Ray object store
-    input_partitions_map: RwLock<HashMap<PartitionId, Vec<Vec<u8>>>>, // TODO(@lsf) can we not use Rwlock?
+    input_partitions_map: RwLock<HashMap<PartitionId, Vec<RecordBatch>>>, // TODO(@lsf) can we not use Rwlock?
 }
 
 impl RayShuffleReaderExec {
@@ -61,11 +59,11 @@ impl RayShuffleReaderExec {
     pub fn add_input_partition(
         &self,
         partition: PartitionId,
-        input_partition: Vec<u8>,
+        input_batch: RecordBatch,
     ) -> Result<(), DataFusionError> {
         let mut map = self.input_partitions_map.write().unwrap();
         let input_partitions = map.entry(partition).or_insert(vec![]);
-        input_partitions.push(input_partition);
+        input_partitions.push(input_batch);
         Ok(())
     }
 }
@@ -137,13 +135,16 @@ impl ExecutionPlan for RayShuffleReaderExec {
 }
 
 struct InMemoryShuffleStream {
-    reader: StreamReader<Cursor<Vec<u8>>>,
+    batch: Arc<RecordBatch>,
+    read: bool,
 }
 
 impl InMemoryShuffleStream {
-    fn try_new(bytes: Vec<u8>) -> Result<Self, DataFusionError> {
-        let reader = StreamReader::try_new(Cursor::new(bytes), None)?;
-        Ok(Self { reader })
+    fn try_new(batch: RecordBatch) -> Result<Self, DataFusionError> {
+        Ok(Self {
+            batch: Arc::new(batch),
+            read: false,
+        })
     }
 }
 
@@ -151,15 +152,17 @@ impl Stream for InMemoryShuffleStream {
     type Item = datafusion::error::Result<RecordBatch>;
 
     fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if let Some(batch) = self.reader.next() {
-            return Poll::Ready(Some(batch.map_err(|e| e.into())));
-        }
-        Poll::Ready(None)
+        Poll::Ready(if self.read {
+            None
+        } else {
+            self.read = true;
+            Some(Ok(self.batch.as_ref().clone()))
+        })
     }
 }
 
 impl RecordBatchStream for InMemoryShuffleStream {
     fn schema(&self) -> SchemaRef {
-        self.reader.schema()
+        self.batch.schema()
     }
 }

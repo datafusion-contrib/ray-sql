@@ -1,11 +1,8 @@
 use crate::planner::{make_execution_graph, PyExecutionGraph};
 use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec};
 use crate::utils::wait_for_future;
-use datafusion::arrow::error::ArrowError;
-use datafusion::arrow::ipc::reader::StreamReader;
-use datafusion::arrow::ipc::writer::StreamWriter;
+use datafusion::arrow::pyarrow::PyArrowConvert;
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::config::Extensions;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::TaskContext;
@@ -17,15 +14,16 @@ use datafusion::prelude::*;
 use datafusion_proto::bytes::{
     physical_plan_from_bytes_with_extension_codec, physical_plan_to_bytes_with_extension_codec,
 };
-use datafusion_python::errors::py_datafusion_err;
 use datafusion_python::physical_plan::PyExecutionPlan;
 use futures::StreamExt;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyList, PyLong, PyTuple};
+use pyo3::types::{PyList, PyLong, PyTuple};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
+
+type PyResultSet = Vec<PyObject>;
 
 #[pyclass(name = "Context", module = "raysql", subclass)]
 pub struct PyContext {
@@ -85,7 +83,9 @@ impl PyContext {
         let graph = make_execution_graph(plan.clone(), self.use_ray_shuffle)?;
 
         // debug logging
-        for stage in graph.query_stages.values() {
+        let mut stages = graph.query_stages.values().collect::<Vec<_>>();
+        stages.sort_by_key(|s| s.id);
+        for stage in stages {
             println!(
                 "Query stage #{}:\n{}",
                 stage.id,
@@ -102,21 +102,27 @@ impl PyContext {
         plan: PyExecutionPlan,
         part: usize,
         inputs: PyObject,
+        py: Python,
     ) -> PyResultSet {
-        execute_partition(plan, part, inputs)
+        execute_partition(plan, part, inputs, py)
     }
 }
 
 #[pyfunction]
-pub fn execute_partition(plan: PyExecutionPlan, part: usize, inputs: PyObject) -> PyResultSet {
-    let batches = _execute_partition(plan, part, inputs)
+pub fn execute_partition(
+    plan: PyExecutionPlan,
+    part: usize,
+    inputs: PyObject,
+    py: Python,
+) -> PyResultSet {
+    _execute_partition(plan, part, inputs)
         .unwrap()
         .into_iter()
-        .map(|batch| PyRecordBatch::new(batch))
-        .collect();
-    PyResultSet::new(batches)
+        .map(|batch| batch.to_pyarrow(py).unwrap()) // TODO(@lsf) handle error
+        .collect()
 }
 
+// TODO(@lsf) change this to use pickle
 #[pyfunction]
 pub fn serialize_execution_plan(plan: PyExecutionPlan) -> PyResult<Vec<u8>> {
     let codec = ShuffleCodec {};
@@ -162,14 +168,13 @@ fn _set_inputs_for_ray_shuffle_reader(
                 .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
                 .extract::<usize>()
                 .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
-            let bytes = pytuple
-                .get_item(2)
-                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
-                .downcast::<PyBytes>()
-                .map_err(|e| DataFusionError::Execution(format!("{}", e)))?
-                .as_bytes()
-                .to_vec(); // TODO(@lsf) avoid copy here
-            reader_exec.add_input_partition(part, bytes)?;
+            let batch = RecordBatch::from_pyarrow(
+                pytuple
+                    .get_item(2)
+                    .map_err(|e| DataFusionError::Execution(format!("{}", e)))?,
+            )
+            .map_err(|e| DataFusionError::Execution(format!("{}", e)))?;
+            reader_exec.add_input_partition(part, batch)?;
         }
     } else {
         for child in plan.children() {
@@ -219,107 +224,4 @@ fn _execute_partition(
     // block and wait on future
     let results = rt.block_on(fut).unwrap()?;
     Ok(results)
-}
-
-#[pyclass(name = "ResultSet", module = "raysql", subclass)]
-pub struct PyResultSet {
-    batches: Vec<PyRecordBatch>,
-}
-
-impl PyResultSet {
-    fn new(batches: Vec<PyRecordBatch>) -> Self {
-        Self { batches }
-    }
-}
-
-fn _read_pybytes(pyobj: &PyAny, batches: &mut Vec<PyRecordBatch>) -> PyResult<()> {
-    let pybytes = pyobj
-        .downcast::<PyBytes>()
-        .map_err(|e| py_datafusion_err(e))?;
-    let reader = StreamReader::try_new(pybytes.as_bytes(), None).map_err(py_datafusion_err)?;
-    for batch in reader {
-        let batch = batch.map_err(|e| py_datafusion_err(e))?;
-        batches.push(PyRecordBatch::new(batch));
-    }
-    Ok(())
-}
-
-#[pymethods]
-impl PyResultSet {
-    /// This constructor takes either a list of bytes or a single bytes object.
-    #[new]
-    fn py_new(pyobj: &PyAny) -> PyResult<Self> {
-        let mut batches = vec![];
-        match pyobj.downcast::<PyList>() {
-            Ok(pylist) => {
-                for item in pylist.iter() {
-                    _read_pybytes(item, &mut batches)?;
-                }
-                Ok(())
-            }
-            _ => _read_pybytes(&pyobj, &mut batches),
-        }?;
-        Ok(Self { batches })
-    }
-
-    fn __repr__(&self) -> PyResult<String> {
-        let batches: Vec<RecordBatch> = self.batches.iter().map(|b| b.batch.clone()).collect();
-        Ok(format!("{}", pretty_format_batches(&batches).unwrap()))
-    }
-
-    fn tobyteslist(&self, py: Python) -> PyResult<PyObject> {
-        let mut items = vec![];
-        for batch in &self.batches {
-            items.push(batch.tobytes(py)?);
-        }
-        Ok(PyList::new(py, &items).into())
-    }
-}
-
-#[pyclass(name = "RecordBatch", module = "raysql", subclass)]
-pub struct PyRecordBatch {
-    pub(crate) batch: RecordBatch,
-}
-
-impl PyRecordBatch {
-    fn new(batch: RecordBatch) -> Self {
-        Self { batch }
-    }
-}
-
-#[pymethods]
-impl PyRecordBatch {
-    #[new]
-    fn py_new(py_obj: &PyBytes) -> PyResult<Self> {
-        let reader =
-            StreamReader::try_new(py_obj.as_bytes(), None).map_err(|e| py_datafusion_err(e))?;
-        let mut batches = vec![];
-        for r in reader {
-            batches.push(r.map_err(|e| py_datafusion_err(e))?);
-        }
-        if let Some(batch) = batches.pop() {
-            Ok(Self { batch })
-        } else {
-            Err(py_datafusion_err("no batches"))
-        }
-    }
-
-    fn __repr__(&self) -> PyResult<String> {
-        Ok(format!(
-            "{}",
-            pretty_format_batches(&[self.batch.clone()]).unwrap()
-        ))
-    }
-
-    fn tobytes(&self, py: Python) -> PyResult<PyObject> {
-        let mut buf = Vec::<u8>::new();
-        write_batch(&mut buf, &self.batch).map_err(|e| py_datafusion_err(e))?;
-        Ok(PyBytes::new(py, &buf).into())
-    }
-}
-
-fn write_batch(mut buf: &mut Vec<u8>, batch: &RecordBatch) -> Result<(), ArrowError> {
-    let mut writer = StreamWriter::try_new(&mut buf, batch.schema().as_ref())?;
-    writer.write(batch)?;
-    writer.finish()
 }

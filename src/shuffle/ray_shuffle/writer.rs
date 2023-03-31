@@ -119,11 +119,16 @@ impl ExecutionPlan for RayShuffleWriterExec {
                     while let Some(result) = stream.next().await {
                         writer.write(result?)?;
                     }
+                    println!(
+                        "RayShuffleWriterExec[stage={}] Finished writing shuffle partition 0. Batches: {}. Rows: {}. Bytes: {}.",
+                        stage_id,
+                        writer.num_batches,
+                        writer.num_rows,
+                        writer.num_bytes
+                    );
                     MemoryStream::try_new(vec![writer.finish()?], schema, None)
                 }
                 Partitioning::Hash(_, _) => {
-                    // TODO(@lsf) What happens if there are multiple RecordBatches
-                    // assigned to the same writer?
                     let mut writers: Vec<InMemoryWriter> = vec![];
                     for _ in 0..partition_count {
                         writers.push(InMemoryWriter::new(schema.clone()));
@@ -143,16 +148,14 @@ impl ExecutionPlan for RayShuffleWriterExec {
                     }
                     let mut result_batches = vec![];
                     for (i, w) in writers.iter_mut().enumerate() {
-                        if w.num_batches > 0 {
-                            println!(
-                                "RayShuffleWriterExec[stage={}] Finished writing shuffle partition {}. Batches: {}. Rows: {}. Bytes: {}.",
-                                stage_id,
-                                i,
-                                w.num_batches,
-                                w.num_rows,
-                                w.num_bytes
-                            );
-                        }
+                        println!(
+                            "RayShuffleWriterExec[stage={}] Finished writing shuffle partition {}. Batches: {}. Rows: {}. Bytes: {}.",
+                            stage_id,
+                            i,
+                            w.num_batches,
+                            w.num_rows,
+                            w.num_bytes
+                        );
                         result_batches.push(w.finish()?);
                     }
                     debug!(
@@ -208,6 +211,8 @@ impl InMemoryWriter {
     }
 
     fn finish(&self) -> Result<RecordBatch> {
+        // TODO(@lsf) Instead of concatenating the batches, return all RecordBatches from
+        // all partitions in one stream, then return an array of batch offsets.
         concat_batches(&self.schema, &self.batches).map_err(DataFusionError::ArrowError)
     }
 }

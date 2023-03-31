@@ -5,8 +5,8 @@ except ImportError:
 
 from ._raysql_internal import (
     Context,
+    ExecutionGraph,
     QueryStage,
-    ResultSet,
     execute_partition,
     serialize_execution_plan,
     deserialize_execution_plan,
