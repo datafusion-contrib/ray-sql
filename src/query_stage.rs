@@ -47,13 +47,7 @@ impl PyQueryStage {
     }
 
     pub fn get_output_partition_count(&self) -> usize {
-        match self.stage.plan.output_partitioning() {
-            Partitioning::UnknownPartitioning(_) => {
-                println!("UnknownPartitioning returning 1");
-                1
-            }
-            p => p.partition_count(),
-        }
+        self.stage.get_output_partition_count()
     }
 }
 
@@ -61,6 +55,16 @@ impl PyQueryStage {
 pub struct QueryStage {
     pub id: usize,
     pub plan: Arc<dyn ExecutionPlan>,
+}
+
+fn _get_output_partition_count(plan: &dyn ExecutionPlan) -> usize {
+    // UnknownPartitioning and HashPartitioning with empty expressions will
+    // both return 1 partition.
+    match plan.output_partitioning() {
+        Partitioning::UnknownPartitioning(_) => 1,
+        Partitioning::Hash(expr, _) if expr.is_empty() => 1,
+        p => p.partition_count(),
+    }
 }
 
 impl QueryStage {
@@ -83,14 +87,7 @@ impl QueryStage {
     }
 
     pub fn get_output_partition_count(&self) -> usize {
-        // TODO(@lsf) UnknownPartitioning should return 1?
-        match self.plan.output_partitioning() {
-            Partitioning::UnknownPartitioning(_) => {
-                println!("UnknownPartitioning returning 1");
-                1
-            }
-            p => p.partition_count(),
-        }
+        _get_output_partition_count(self.plan.as_ref())
     }
 }
 
