@@ -81,7 +81,9 @@ impl QueryStage {
     /// Get the input partition count. This is the same as the number of concurrent tasks
     /// when we schedule this query stage for execution
     pub fn get_input_partition_count(&self) -> usize {
-        _get_output_partition_count(self.plan.children()[0].as_ref())
+        self.plan.children()[0]
+            .output_partitioning()
+            .partition_count()
     }
 
     pub fn get_output_partition_count(&self) -> usize {
