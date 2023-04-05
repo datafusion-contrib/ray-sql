@@ -3,9 +3,7 @@ extern crate core;
 use pyo3::prelude::*;
 
 mod proto;
-use crate::context::{
-    deserialize_execution_plan, empty_result_set, execute_partition, serialize_execution_plan,
-};
+use crate::context::{deserialize_execution_plan, execute_partition, serialize_execution_plan};
 pub use proto::generated::protobuf;
 
 pub mod context;
@@ -24,6 +22,5 @@ fn _raysql_internal(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(execute_partition, m)?)?;
     m.add_function(wrap_pyfunction!(serialize_execution_plan, m)?)?;
     m.add_function(wrap_pyfunction!(deserialize_execution_plan, m)?)?;
-    m.add_function(wrap_pyfunction!(empty_result_set, m)?)?;
     Ok(())
 }
