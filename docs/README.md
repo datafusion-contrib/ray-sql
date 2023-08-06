@@ -244,7 +244,7 @@ child plans, building up a DAG of futures.
 The output of each query stage needs to be persisted somewhere so that the next query stage can read it. Currently,
 RaySQL is just writing the output to disk in Arrow IPC format, and this means that RaySQL is not truly distributed
 yet because it requires a shared file system. It would be better to use the Ray object store instead, as
-proposed [here](https://github.com/andygrove/ray-sql/issues/22).
+proposed [here](https://github.com/datafusion-contrib/ray-sql/issues/22).
 
 DataFusion's `RepartitionExec` uses threads and channels within a single process and is not suitable for a
 distributed query engine, so RaySQL rewrites the physical plan and replaces the `RepartionExec` with a pair of
