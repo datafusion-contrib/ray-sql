@@ -8,7 +8,7 @@ import ray
 
 import raysql
 from raysql import Context, ExecutionGraph, QueryStage
-
+from typing import List
 
 def schedule_execution(
     graph: ExecutionGraph,
