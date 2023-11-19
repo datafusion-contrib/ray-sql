@@ -12,9 +12,9 @@ use datafusion::physical_plan::{
 };
 use futures::Stream;
 use std::any::Any;
-use std::collections::HashMap;
-use std::fmt::Formatter;
-use std::pin::Pin;
+// use std::collections::HashMap;
+// use std::fmt::Formatter;
+// use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 
