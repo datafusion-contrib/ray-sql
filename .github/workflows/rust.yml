@@ -28,6 +28,14 @@ jobs:
         export PATH=$PATH:$PROTOC
         protoc --version
     - name: Build Rust code
-      run: cargo build --verbose
+      run: |
+        export PROTOC=$HOME/d/protoc/bin
+        export PATH=$PATH:$PROTOC
+        protoc --version
+        cargo build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        export PROTOC=$HOME/d/protoc/bin
+        export PATH=$PATH:$PROTOC
+        protoc --version
+        cargo test --verbose
