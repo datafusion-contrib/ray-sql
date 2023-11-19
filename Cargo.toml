@@ -35,6 +35,6 @@ crate-type = ["cdylib", "rlib"]
 [package.metadata.maturin]
 name = "raysql._raysql_internal"
 
-#[profile.release]
-#codegen-units = 1
-#lto = true
+[profile.release]
+codegen-units = 1
+lto = true
