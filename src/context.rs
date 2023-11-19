@@ -73,6 +73,16 @@ impl PyContext {
         Ok(())
     }
 
+    pub fn register_datalake_table(&self, name: &str, path: Vec<&str>, py: Python) -> PyResult<()> {
+        let options = ParquetReadOptions::default();
+        let listing_options = options.to_listing_options(&self.ctx.state().config());
+        wait_for_future(py, self.ctx.register_listing_table(name, path, listing_options, None, None))?;
+        Ok(())
+    }
+
+
+
+
     /// Execute SQL directly against the DataFusion context. Useful for statements
     /// such as "create view" or "drop view"
     pub fn sql(&self, sql: &str, py: Python) -> PyResult<()> {
