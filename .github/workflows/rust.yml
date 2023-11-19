@@ -16,7 +16,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build
+    - name: Install protobuf compiler
+      shell: bash
+      run: |
+        mkdir -p $HOME/d/protoc
+        cd $HOME/d/protoc
+        export PROTO_ZIP="protoc-21.4-linux-x86_64.zip"
+        curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
+        unzip $PROTO_ZIP
+        export PATH=$PATH:$HOME/d/protoc/bin
+        protoc --version    - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
