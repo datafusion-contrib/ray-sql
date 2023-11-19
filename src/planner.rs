@@ -127,7 +127,7 @@ fn generate_query_stages(
         .iter()
         .map(|x| generate_query_stages(x.clone(), graph, use_ray_shuffle))
         .collect::<Result<Vec<_>>>()?;
-    let plan = with_new_children_if_necessary(plan, new_children)?;
+    let plan = with_new_children_if_necessary(plan, new_children)?.into();
 
     debug!("plan = {}", displayable(plan.as_ref()).one_line());
     debug!("output_part = {:?}", plan.output_partitioning());
@@ -154,7 +154,7 @@ fn generate_query_stages(
         let partitioning_scheme = coalesce_input.output_partitioning();
         let new_input =
             create_shuffle_exchange(coalesce_input, graph, partitioning_scheme, use_ray_shuffle)?;
-        with_new_children_if_necessary(plan, vec![new_input])
+        with_new_children_if_necessary(plan, vec![new_input]).map(|p| p.into())
     } else if plan
         .as_any()
         .downcast_ref::<SortPreservingMergeExec>()
@@ -168,7 +168,7 @@ fn generate_query_stages(
             partitioning_scheme,
             use_ray_shuffle,
         )?;
-        with_new_children_if_necessary(plan, vec![new_input])
+        with_new_children_if_necessary(plan, vec![new_input]).map(|p| p.into())
     } else {
         Ok(plan)
     }?;
@@ -397,7 +397,7 @@ mod test {
         let plan = df.create_physical_plan().await?;
         output.push_str(&format!(
             "DataFusion Physical Plan\n========================\n\n{}\n",
-            displayable(plan.as_ref()).indent()
+            displayable(plan.as_ref()).indent(false)
         ));
 
         output.push_str("RaySQL Plan\n===========\n\n");
@@ -408,7 +408,7 @@ mod test {
                 "Query Stage #{id} ({} -> {}):\n{}\n",
                 query_stage.get_input_partition_count(),
                 query_stage.get_output_partition_count(),
-                displayable(query_stage.plan.as_ref()).indent()
+                displayable(query_stage.plan.as_ref()).indent(false)
             ));
         }
         let expected_file = format!("testdata/expected-plans/q{n}.txt");

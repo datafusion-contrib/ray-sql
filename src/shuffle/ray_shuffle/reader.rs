@@ -1,3 +1,4 @@
+use crate::shuffle::ray_shuffle::CombinedRecordBatchStream;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
@@ -5,9 +6,9 @@ use datafusion::error::DataFusionError;
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
-use datafusion::physical_plan::union::CombinedRecordBatchStream;
 use datafusion::physical_plan::{
-    DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream, SendableRecordBatchStream,
+    DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
+    SendableRecordBatchStream,
 };
 use futures::Stream;
 use std::any::Any;
@@ -121,16 +122,18 @@ impl ExecutionPlan for RayShuffleReaderExec {
         )))
     }
 
+    fn statistics(&self) -> Statistics {
+        Statistics::default()
+    }
+}
+
+impl DisplayAs for RayShuffleReaderExec {
     fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "RayShuffleReaderExec(stage_id={}, input_partitioning={:?})",
             self.stage_id, self.partitioning
         )
-    }
-
-    fn statistics(&self) -> Statistics {
-        Statistics::default()
     }
 }
 

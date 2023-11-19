@@ -1,7 +1,8 @@
 use crate::planner::{make_execution_graph, PyExecutionGraph};
 use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec};
 use crate::utils::wait_for_future;
-use datafusion::arrow::pyarrow::PyArrowConvert;
+use datafusion::arrow::pyarrow::FromPyArrow;
+use datafusion::arrow::pyarrow::ToPyArrow;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::config::Extensions;
 use datafusion::error::{DataFusionError, Result};
@@ -106,7 +107,7 @@ impl PyContext {
             println!(
                 "Query stage #{}:\n{}",
                 stage.id,
-                displayable(stage.plan.as_ref()).indent()
+                displayable(stage.plan.as_ref()).indent(false)
             );
         }
 

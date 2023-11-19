@@ -13,7 +13,7 @@ use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder}
 use datafusion::physical_plan::repartition::BatchPartitioner;
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
-    metrics, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
+    metrics, DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
     SendableRecordBatchStream,
 };
 use datafusion_proto::protobuf::PartitionStats;
@@ -97,14 +97,6 @@ impl ExecutionPlan for ShuffleWriterExec {
         _: Vec<Arc<dyn ExecutionPlan>>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         unimplemented!()
-    }
-
-    fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "ShuffleWriterExec(stage_id={}, output_partitioning={:?})",
-            self.stage_id, self.partitioning
-        )
     }
 
     fn execute(
@@ -240,6 +232,16 @@ impl ExecutionPlan for ShuffleWriterExec {
 
     fn statistics(&self) -> Statistics {
         Statistics::default()
+    }
+}
+
+impl DisplayAs for ShuffleWriterExec {
+    fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "ShuffleWriterExec(stage_id={}, output_partitioning={:?})",
+            self.stage_id, self.partitioning
+        )
     }
 }
 
