@@ -1,8 +1,8 @@
 import os
-
+import pandas as pd
 import ray
 
-from raysql import RaySqlContext, ResultSet
+from raysql import RaySqlContext
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -18,5 +18,5 @@ ctx.register_parquet("tips", f"{SCRIPT_DIR}/tips.parquet")
 result_set = ctx.sql(
     "select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker"
 )
-print("Result:")
-print(ResultSet(result_set))
+for record_batch in result_set:
+    print(record_batch.to_pandas())

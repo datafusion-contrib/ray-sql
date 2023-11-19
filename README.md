@@ -19,25 +19,28 @@ This is a research project to evaluate performing distributed SQL queries from P
 Run the following example live in your browser using a Google Colab [notebook](https://colab.research.google.com/drive/1tmSX0Lu6UFh58_-DBUVoyYx6BoXHOszP?usp=sharing).
 
 ```python
+import os
+import pandas as pd
 import ray
-from raysql.context import RaySqlContext
-from raysql.worker import Worker
 
-# Start our cluster
-ray.init()
+from raysql import RaySqlContext
 
-# create some remote Workers
-workers = [Worker.remote() for i in range(2)]
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
-# create a remote context and register a table
-ctx = RaySqlContext.remote(workers)
-ray.get(ctx.register_csv.remote('tips', 'tips.csv', True))
+# Start a local cluster
+ray.init(resources={"worker": 1})
 
-# Parquet is also supported
-# ctx.register_parquet('tips', 'tips.parquet')
+# Create a context and register a table
+ctx = RaySqlContext(2, use_ray_shuffle=True)
+# Register either a CSV or Parquet file
+# ctx.register_csv("tips", f"{SCRIPT_DIR}/tips.csv", True)
+ctx.register_parquet("tips", f"{SCRIPT_DIR}/tips.parquet")
 
-result_set = ray.get(ctx.sql.remote('select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker'))
-print(result_set)
+result_set = ctx.sql(
+  "select sex, smoker, avg(tip/total_bill) as tip_pct from tips group by sex, smoker"
+)
+for record_batch in result_set:
+  print(record_batch.to_pandas())
 ```
 
 ## Status
