@@ -25,7 +25,7 @@ jobs:
         curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
         unzip $PROTO_ZIP
         export PROTOC=$HOME/d/protoc/bin
-        export PATH=$PATH:PROTOC
+        export PATH=$PATH:$PROTOC
         protoc --version
     - name: Build Rust code
       run: cargo build --verbose
