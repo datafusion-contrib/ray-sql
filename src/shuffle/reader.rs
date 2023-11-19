@@ -3,7 +3,7 @@ use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::arrow::ipc::reader::FileReader;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Statistics;
-use datafusion::error::DataFusionError;
+use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
 use datafusion::physical_expr::PhysicalSortExpr;
@@ -125,8 +125,8 @@ impl ExecutionPlan for ShuffleReaderExec {
         )))
     }
 
-    fn statistics(&self) -> Statistics {
-        Statistics::default()
+    fn statistics(&self) -> Result<Statistics> {
+        Ok(Statistics::new_unknown(&self.schema))
     }
 }
 
