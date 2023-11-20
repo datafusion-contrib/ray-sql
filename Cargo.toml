@@ -12,9 +12,9 @@ rust-version = "1.62"
 build = "build.rs"
 
 [dependencies]
-datafusion = { version = "20.0.0", features = ["pyarrow", "avro"] }
-datafusion-proto = "20.0.0"
-datafusion-python = "20.0.0"
+datafusion = { version = "22.0.0", features = ["pyarrow", "avro"] }
+datafusion-proto = "22.0.0"
+datafusion-python = "22.0.0"
 futures = "0.3"
 glob = "0.3"
 log = "0.4"

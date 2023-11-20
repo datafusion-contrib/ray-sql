@@ -203,8 +203,8 @@ class RaySqlContext:
     def register_parquet(self, table_name: str, path: str):
         self.ctx.register_parquet(table_name, path)
 
-    def register_data_lake(self, table_name: str, paths: List[str]):
-        self.ctx.register_datalake_table(table_name, paths)
+    def register_dataset(self, table_name: str, dataset: pa.Dataset):
+        self.ctx.register_dataset(table_name, dataset)
 
     def sql(self, sql: str) -> pa.RecordBatch:
         # TODO we should parse sql and inspect the plan rather than

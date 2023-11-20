@@ -1,9 +1,11 @@
+use crate::dataset::Dataset;
 use crate::planner::{make_execution_graph, PyExecutionGraph};
 use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec};
 use crate::utils::wait_for_future;
 use datafusion::arrow::pyarrow::PyArrowConvert;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::config::Extensions;
+use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::disk_manager::DiskManagerConfig;
@@ -73,10 +75,13 @@ impl PyContext {
         Ok(())
     }
 
-    pub fn register_datalake_table(&self, name: &str, path: Vec<&str>, py: Python) -> PyResult<()> {
-        let options = ParquetReadOptions::default();
-        let listing_options = options.to_listing_options(&self.ctx.state().config());
-        wait_for_future(py, self.ctx.register_listing_table(name, path, listing_options, None, None))?;
+    fn register_dataset(&self, name: &str, dataset: &PyAny, py: Python) -> PyResult<()> {
+        let table: Arc<dyn TableProvider> = Arc::new(Dataset::new(dataset, py)?);
+
+        self.ctx
+            .register_table(name, table)
+            .map_err(DataFusionError::from)?;
+
         Ok(())
     }
 
