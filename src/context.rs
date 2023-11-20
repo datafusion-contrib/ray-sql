@@ -2,7 +2,8 @@ use crate::dataset::Dataset;
 use crate::planner::{make_execution_graph, PyExecutionGraph};
 use crate::shuffle::{RayShuffleReaderExec, ShuffleCodec};
 use crate::utils::wait_for_future;
-use datafusion::arrow::pyarrow::PyArrowConvert;
+use datafusion::arrow::pyarrow::FromPyArrow;
+use datafusion::arrow::pyarrow::ToPyArrow;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::config::Extensions;
 use datafusion::datasource::TableProvider;
@@ -10,6 +11,7 @@ use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::TaskContext;
 use datafusion::execution::disk_manager::DiskManagerConfig;
 use datafusion::execution::memory_pool::FairSpillPool;
+use datafusion::execution::options::ReadOptions;
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::physical_plan::{displayable, ExecutionPlan};
 use datafusion::prelude::*;
@@ -85,9 +87,6 @@ impl PyContext {
         Ok(())
     }
 
-
-
-
     /// Execute SQL directly against the DataFusion context. Useful for statements
     /// such as "create view" or "drop view"
     pub fn sql(&self, sql: &str, py: Python) -> PyResult<()> {
@@ -111,7 +110,7 @@ impl PyContext {
             println!(
                 "Query stage #{}:\n{}",
                 stage.id,
-                displayable(stage.plan.as_ref()).indent()
+                displayable(stage.plan.as_ref()).indent(false)
             );
         }
 

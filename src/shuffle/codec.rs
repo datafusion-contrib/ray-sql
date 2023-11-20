@@ -10,7 +10,7 @@ use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::common::{DataFusionError, Result};
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::execution::FunctionRegistry;
-use datafusion::logical_expr::{AggregateUDF, ScalarUDF};
+use datafusion::logical_expr::{AggregateUDF, ScalarUDF, WindowUDF};
 use datafusion::physical_plan::{ExecutionPlan, Partitioning};
 use datafusion_proto::physical_plan::from_proto::parse_protobuf_hash_partitioning;
 use datafusion_proto::physical_plan::AsExecutionPlan;
@@ -186,5 +186,9 @@ impl FunctionRegistry for RaySqlFunctionRegistry {
 
     fn udaf(&self, name: &str) -> datafusion::common::Result<Arc<AggregateUDF>> {
         Err(DataFusionError::Plan(format!("Invalid UDAF: {name}")))
+    }
+
+    fn udwf(&self, name: &str) -> datafusion::common::Result<Arc<WindowUDF>> {
+        Err(DataFusionError::Plan(format!("Invalid UDAWF: {name}")))
     }
 }

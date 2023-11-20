@@ -12,7 +12,7 @@ use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder}
 use datafusion::physical_plan::repartition::BatchPartitioner;
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
-    DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
+    DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, SendableRecordBatchStream,
 };
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -86,13 +86,6 @@ impl ExecutionPlan for RayShuffleWriterExec {
         unimplemented!()
     }
 
-    fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "RayShuffleWriterExec(stage_id={}, output_partitioning={:?})",
-            self.stage_id, self.partitioning
-        )
-    }
     fn execute(
         &self,
         input_partition: usize,
@@ -173,8 +166,18 @@ impl ExecutionPlan for RayShuffleWriterExec {
         )))
     }
 
-    fn statistics(&self) -> Statistics {
-        Statistics::default()
+    fn statistics(&self) -> Result<Statistics> {
+        Ok(Statistics::new_unknown(&self.schema()))
+    }
+}
+
+impl DisplayAs for RayShuffleWriterExec {
+    fn fmt_as(&self, _t: DisplayFormatType, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "RayShuffleWriterExec(stage_id={}, output_partitioning={:?})",
+            self.stage_id, self.partitioning
+        )
     }
 }
 
