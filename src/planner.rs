@@ -105,7 +105,7 @@ pub fn make_execution_graph(
     let root = generate_query_stages(plan, &mut graph, use_ray_shuffle)?;
     // We force the final stage to produce a single partition to return
     // to the driver. This might not suit ETL workloads.
-    if root.output_partitioning().partition_count() > 1 {
+    if root.properties().output_partitioning().partition_count() > 1 {
         let root = Arc::new(CoalescePartitionsExec::new(root));
         graph.add_query_stage(graph.next_id(), root);
     } else {
@@ -124,13 +124,13 @@ fn generate_query_stages(
     // recurse down first
     let new_children: Vec<Arc<dyn ExecutionPlan>> = plan
         .children()
-        .iter()
+        .into_iter()
         .map(|x| generate_query_stages(x.clone(), graph, use_ray_shuffle))
         .collect::<Result<Vec<_>>>()?;
-    let plan = with_new_children_if_necessary(plan, new_children)?.into();
+    let plan = with_new_children_if_necessary(plan, new_children)?;
 
     debug!("plan = {}", displayable(plan.as_ref()).one_line());
-    debug!("output_part = {:?}", plan.output_partitioning());
+    debug!("output_part = {:?}", plan.properties().output_partitioning());
 
     let new_plan = if let Some(repart) = plan.as_any().downcast_ref::<RepartitionExec>() {
         match repart.partitioning() {
@@ -151,9 +151,9 @@ fn generate_query_stages(
         .is_some()
     {
         let coalesce_input = plan.children()[0].clone();
-        let partitioning_scheme = coalesce_input.output_partitioning();
+        let partitioning_scheme = coalesce_input.properties().output_partitioning();
         let new_input =
-            create_shuffle_exchange(coalesce_input, graph, partitioning_scheme, use_ray_shuffle)?;
+            create_shuffle_exchange(coalesce_input.clone(), graph, partitioning_scheme.to_owned(), use_ray_shuffle)?;
         with_new_children_if_necessary(plan, vec![new_input]).map(|p| p.into())
     } else if plan
         .as_any()
@@ -161,11 +161,11 @@ fn generate_query_stages(
         .is_some()
     {
         let partitioned_sort_plan = plan.children()[0].clone();
-        let partitioning_scheme = partitioned_sort_plan.output_partitioning();
+        let partitioning_scheme = partitioned_sort_plan.properties().output_partitioning();
         let new_input = create_shuffle_exchange(
-            partitioned_sort_plan,
+            partitioned_sort_plan.clone(),
             graph,
-            partitioning_scheme,
+            partitioning_scheme.to_owned(),
             use_ray_shuffle,
         )?;
         with_new_children_if_necessary(plan, vec![new_input]).map(|p| p.into())
@@ -176,7 +176,7 @@ fn generate_query_stages(
     debug!("new_plan = {}", displayable(new_plan.as_ref()).one_line());
     debug!(
         "new_output_part = {:?}\n\n-------------------------\n\n",
-        new_plan.output_partitioning()
+        new_plan.properties().output_partitioning()
     );
 
     Ok(new_plan)
@@ -216,7 +216,7 @@ fn create_shuffle_exchange(
 
     debug!(
         "Created shuffle writer with output partitioning {:?}",
-        shuffle_writer.output_partitioning()
+        shuffle_writer.properties().output_partitioning()
     );
 
     let stage_id = graph.add_query_stage(stage_id, shuffle_writer);

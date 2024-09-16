@@ -6,15 +6,14 @@ use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::common::{Result, Statistics};
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
-use datafusion::physical_expr::PhysicalSortExpr;
-use datafusion::physical_plan::common::{batch_byte_size, IPCWriter};
+use datafusion::physical_expr::{EquivalenceProperties, PhysicalSortExpr};
+use datafusion::physical_plan::common::IPCWriter;
 use datafusion::physical_plan::memory::MemoryStream;
 use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
 use datafusion::physical_plan::repartition::BatchPartitioner;
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
-    metrics, DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
-    SendableRecordBatchStream,
+    metrics, DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties, RecordBatchStream, SendableRecordBatchStream
 };
 use datafusion_proto::protobuf::PartitionStats;
 use futures::StreamExt;
@@ -32,7 +31,7 @@ pub struct ShuffleWriterExec {
     pub stage_id: usize,
     pub(crate) plan: Arc<dyn ExecutionPlan>,
     /// Output partitioning
-    partitioning: Partitioning,
+    properties: PlanProperties,
     /// Directory to write shuffle files from
     pub shuffle_dir: String,
     /// Metrics
@@ -59,11 +58,12 @@ impl ShuffleWriterExec {
             }
             _ => partitioning,
         };
+        let properties = PlanProperties::new(EquivalenceProperties::new(plan.schema()), partitioning, datafusion::physical_plan::ExecutionMode::Unbounded);
 
         Self {
             stage_id,
             plan,
-            partitioning,
+            properties,
             shuffle_dir: shuffle_dir.to_string(),
             metrics: ExecutionPlanMetricsSet::new(),
         }
@@ -79,17 +79,8 @@ impl ExecutionPlan for ShuffleWriterExec {
         self.plan.schema()
     }
 
-    fn output_partitioning(&self) -> Partitioning {
-        self.partitioning.clone()
-    }
-
-    fn output_ordering(&self) -> Option<&[PhysicalSortExpr]> {
-        // TODO in the case of a single partition of a sorted plan this could be implemented
-        None
-    }
-
-    fn children(&self) -> Vec<Arc<dyn ExecutionPlan>> {
-        vec![self.plan.clone()]
+    fn children(&self) -> Vec<&Arc<dyn ExecutionPlan>> {
+        vec![&self.plan]
     }
 
     fn with_new_children(
@@ -116,7 +107,7 @@ impl ExecutionPlan for ShuffleWriterExec {
             MetricBuilder::new(&self.metrics).subset_time("repart_time", input_partition);
 
         let stage_id = self.stage_id;
-        let partitioning = self.output_partitioning();
+        let partitioning = self.properties().output_partitioning().to_owned();
         let partition_count = partitioning.partition_count();
         let shuffle_dir = self.shuffle_dir.clone();
 
@@ -145,7 +136,7 @@ impl ExecutionPlan for ShuffleWriterExec {
                     }
 
                     let mut partitioner =
-                        BatchPartitioner::try_new(partitioning, repart_time.clone())?;
+                        BatchPartitioner::try_new(partitioning.clone(), repart_time.clone())?;
 
                     let mut rows = 0;
 
@@ -224,6 +215,7 @@ impl ExecutionPlan for ShuffleWriterExec {
             MemoryStream::try_new(vec![batch], schema, None)
         };
         let schema = self.schema();
+
         Ok(Box::pin(RecordBatchStreamAdapter::new(
             schema,
             futures::stream::once(results).try_flatten(),
@@ -233,6 +225,14 @@ impl ExecutionPlan for ShuffleWriterExec {
     fn statistics(&self) -> Result<Statistics> {
         Ok(Statistics::new_unknown(&self.schema()))
     }
+    
+    fn name(&self) -> &str {
+        "shuffle writer"
+    }
+    
+    fn properties(&self) -> &datafusion::physical_plan::PlanProperties {
+        &self.properties
+    }
 }
 
 impl DisplayAs for ShuffleWriterExec {
@@ -240,7 +240,7 @@ impl DisplayAs for ShuffleWriterExec {
         write!(
             f,
             "ShuffleWriterExec(stage_id={}, output_partitioning={:?})",
-            self.stage_id, self.partitioning
+            self.stage_id, self.properties().partitioning
         )
     }
 }
@@ -266,7 +266,7 @@ pub async fn write_stream_to_disk(
     while let Some(result) = stream.next().await {
         let batch = result?;
 
-        let batch_size_bytes: usize = batch_byte_size(&batch);
+        let batch_size_bytes: usize = batch.get_array_memory_size();
         num_batches += 1;
         num_rows += batch.num_rows();
         num_bytes += batch_size_bytes;
