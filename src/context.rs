@@ -75,7 +75,7 @@ impl PyContext {
         Ok(())
     }
 
-    pub fn register_datalake_table(&self, name: &str, path: Vec<&str>, py: Python) -> PyResult<()> {
+    pub fn register_datalake_table(&self, name: &str, path: Vec<String>, py: Python) -> PyResult<()> {
         // let options = ParquetReadOptions::default();
         // let listing_options = options.to_listing_options(&self.ctx.state().config());
         // wait_for_future(py, self.ctx.register_listing_table(name, path, listing_options, None, None))?;
@@ -195,7 +195,7 @@ fn _set_inputs_for_ray_shuffle_reader(
         }
     } else {
         for child in plan.children() {
-            _set_inputs_for_ray_shuffle_reader(child, part, input_partitions)?;
+            _set_inputs_for_ray_shuffle_reader(child.to_owned(), part, input_partitions)?;
         }
     }
     Ok(())
@@ -209,15 +209,15 @@ fn _execute_partition(
     part: usize,
     inputs: PyObject,
 ) -> Result<Vec<RecordBatch>> {
-    let ctx = Arc::new(TaskContext::try_new(
-        "task_id".to_string(),
+    let ctx = Arc::new(TaskContext::new(
+        Some("task_id".to_string()),
         "session_id".to_string(),
+        SessionConfig::default(),
         HashMap::new(),
         HashMap::new(),
         HashMap::new(),
         Arc::new(RuntimeEnv::default()),
-        Extensions::default(),
-    )?);
+    ));
     Python::with_gil(|py| {
         let input_partitions = inputs
             .as_ref(py)

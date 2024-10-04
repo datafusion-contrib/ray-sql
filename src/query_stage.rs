@@ -60,7 +60,7 @@ pub struct QueryStage {
 fn _get_output_partition_count(plan: &dyn ExecutionPlan) -> usize {
     // UnknownPartitioning and HashPartitioning with empty expressions will
     // both return 1 partition.
-    match plan.output_partitioning() {
+    match plan.properties().output_partitioning() {
         Partitioning::UnknownPartitioning(_) => 1,
         Partitioning::Hash(expr, _) if expr.is_empty() => 1,
         p => p.partition_count(),
@@ -82,6 +82,7 @@ impl QueryStage {
     /// when we schedule this query stage for execution
     pub fn get_input_partition_count(&self) -> usize {
         self.plan.children()[0]
+            .properties()
             .output_partitioning()
             .partition_count()
     }

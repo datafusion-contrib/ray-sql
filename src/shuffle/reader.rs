@@ -6,10 +6,9 @@ use datafusion::common::Statistics;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::TaskContext;
 use datafusion::physical_expr::expressions::UnKnownColumn;
-use datafusion::physical_expr::PhysicalSortExpr;
+use datafusion::physical_expr::{EquivalenceProperties, PhysicalSortExpr};
 use datafusion::physical_plan::{
-    DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, RecordBatchStream,
-    SendableRecordBatchStream,
+    DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties, RecordBatchStream, SendableRecordBatchStream
 };
 use futures::Stream;
 use glob::glob;
@@ -27,8 +26,8 @@ pub struct ShuffleReaderExec {
     pub stage_id: usize,
     /// The output schema of the query stage being read from
     schema: SchemaRef,
-    /// Output partitioning
-    partitioning: Partitioning,
+
+    properties: PlanProperties,
     /// Directory to read shuffle files from
     pub shuffle_dir: String,
 }
@@ -54,10 +53,12 @@ impl ShuffleReaderExec {
             _ => partitioning,
         };
 
+        let properties = PlanProperties::new(EquivalenceProperties::new(schema.clone()), partitioning, datafusion::physical_plan::ExecutionMode::Unbounded);
+
         Self {
             stage_id,
             schema,
-            partitioning,
+            properties,
             shuffle_dir: shuffle_dir.to_string(),
         }
     }
@@ -72,16 +73,7 @@ impl ExecutionPlan for ShuffleReaderExec {
         self.schema.clone()
     }
 
-    fn output_partitioning(&self) -> Partitioning {
-        self.partitioning.clone()
-    }
-
-    fn output_ordering(&self) -> Option<&[PhysicalSortExpr]> {
-        // TODO could be implemented in some cases
-        None
-    }
-
-    fn children(&self) -> Vec<Arc<dyn ExecutionPlan>> {
+    fn children(&self) -> Vec<&Arc<dyn ExecutionPlan>> {
         vec![]
     }
 
@@ -128,6 +120,14 @@ impl ExecutionPlan for ShuffleReaderExec {
     fn statistics(&self) -> Result<Statistics> {
         Ok(Statistics::new_unknown(&self.schema))
     }
+    
+    fn name(&self) -> &str {
+        "shuffle reader"
+    }
+    
+    fn properties(&self) -> &datafusion::physical_plan::PlanProperties {
+        &self.properties
+    }
 }
 
 impl DisplayAs for ShuffleReaderExec {
@@ -135,7 +135,7 @@ impl DisplayAs for ShuffleReaderExec {
         write!(
             f,
             "ShuffleReaderExec(stage_id={}, input_partitioning={:?})",
-            self.stage_id, self.partitioning
+            self.stage_id, self.properties().partitioning
         )
     }
 }
